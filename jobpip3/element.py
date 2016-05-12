@@ -87,7 +87,7 @@ class Element(object):
     def _write_thread(self, process):
         """write records from input-queue to subprocess"""
         thread = threading.currentThread()
-        print >>sys.stderr, "{}: started".format(thread.name)
+        #~ print >>sys.stderr, "{}: started".format(thread.name)
 
         # count records of this thread
         records_per_thread = 0
@@ -115,24 +115,24 @@ class Element(object):
 
                 # limit reached ?
                 if self.worker_limit <= records_per_thread:
-                    print >>sys.stderr, "{} reached limit: {}".format(
-                        thread.name, self.worker_limit
-                    )
+                    #~ print >>sys.stderr, "{} reached limit: {}".format(
+                        #~ thread.name, self.worker_limit
+                    #~ )
                     break
 
             # no new input records
             except Empty:
-                print >>sys.stderr, "{}: inqueue empty".format(
-                    thread.name
-                )
+                #~ print >>sys.stderr, "{}: inqueue empty".format(
+                    #~ thread.name
+                #~ )
                 # is input feeder still alive?
                 if not self._feeder.is_alive():
                     # no more input - exit writer
                     break
 
-        print >>sys.stderr, "{}: exited (in: {})".format(
-            thread.name, records_per_thread
-        )
+        #~ print >>sys.stderr, "{}: exited (in: {})".format(
+            #~ thread.name, records_per_thread
+        #~ )
         process.stdin.flush()
         process.stdin.close()
 
@@ -140,7 +140,7 @@ class Element(object):
     def _read_thread(self, process):
         """read records from subprocess and write to output-queue"""
         thread = threading.currentThread()
-        print >>sys.stderr, "{}: started".format(thread.name)
+        #~ print >>sys.stderr, "{}: started".format(thread.name)
 
         # count records of this thread
         records_per_thread = 0
@@ -156,16 +156,16 @@ class Element(object):
             # count output records for this thread
             records_per_thread += 1
 
-        print >>sys.stderr, "{}: exited (out: {})".format(
-            thread.name, records_per_thread
-        )
+        #~ print >>sys.stderr, "{}: exited (out: {})".format(
+            #~ thread.name, records_per_thread
+        #~ )
         process.stdout.close()
 
 
     def _feed_thread(self, records):
         """feed records to subprocess queue of this element"""
         thread = threading.currentThread()
-        print >>sys.stderr, "{}: started".format(thread.name)
+        #~ print >>sys.stderr, "{}: started".format(thread.name)
 
         # count records of this thread
         records_per_thread = 0
@@ -173,14 +173,14 @@ class Element(object):
         for record in records:
             # put another record in the queue
             self._inqueue.put(record)
-            print >>sys.stderr, "{}: record iterable -> inqueue".format(
-                thread.name
-            )
+            #~ print >>sys.stderr, "{}: record iterable -> inqueue".format(
+                #~ thread.name
+            #~ )
             records_per_thread += 1
 
-        print >>sys.stderr, "{}: exited (records in: {})".format(
-            thread.name, records_per_thread
-        )
+        #~ print >>sys.stderr, "{}: exited (records in: {})".format(
+            #~ thread.name, records_per_thread
+        #~ )
 
 
     def _launch_worker(self):
@@ -274,10 +274,10 @@ class Element(object):
 
             # currently no output records in queue
             except Empty:
-                print >>sys.stderr, "{}: outqueue empty".format(
-                    self.__class__.__name__
-                )
-
+                #~ print >>sys.stderr, "{}: outqueue empty".format(
+                    #~ self.__class__.__name__
+                #~ )
+                pass
 
             # maintain all subprocess workers
             for p in self._workers:
@@ -299,9 +299,9 @@ class Element(object):
                     continue
 
                 # unregister this worker
-                print >>sys.stderr, "{}: subprocess {} exited ({})".format(
-                    self.__class__.__name__, p['id'], p['process'].returncode
-                )
+                #~ print >>sys.stderr, "{}: subprocess {} exited ({})".format(
+                    #~ self.__class__.__name__, p['id'], p['process'].returncode
+                #~ )
                 self._workers.remove(p)
 
                 # relaunch process if a worker_limit is set and we still get
@@ -309,9 +309,9 @@ class Element(object):
                 if self._has_input and self.worker_limit > 0 and \
                     (self._feeder.is_alive() or not self._inqueue.empty()):
 
-                    print >>sys.stderr, "{}: restarting subprocess {}".format(
-                        self.__class__.__name__, p['id']
-                    )
+                    #~ print >>sys.stderr, "{}: restarting subprocess {}".format(
+                        #~ self.__class__.__name__, p['id']
+                    #~ )
                     # launch new worker
                     self._workers += [ self._launch_worker() ]
 
@@ -322,14 +322,14 @@ class Element(object):
             # no jobs left?
             if len(self._workers) == 0:
                 # exit
-                print >>sys.stderr, "{}: no more subprocesses: exiting".format(
-                    self.__class__.__name__
-                )
+                #~ print >>sys.stderr, "{}: no more subprocesses: exiting".format(
+                    #~ self.__class__.__name__
+                #~ )
                 break
 
-        print >>sys.stderr, "{}: exited (in: {} out: {})".format(
-            self.__class__.__name__, self.input_count, self.output_count
-        )
+        #~ print >>sys.stderr, "{}: exited (in: {} out: {})".format(
+            #~ self.__class__.__name__, self.input_count, self.output_count
+        #~ )
 
         # block until all tasks are done
         self._outqueue.join()
@@ -428,9 +428,9 @@ if __name__ == "__main__":
     # limit amount of records for this subprocess
     record_limit = int(sys.argv[4])
 
-    print >>sys.stderr, "{} ({}): started. argv: {}".format(
-        element_class.__name__, worker_id, sys.argv
-    )
+    #~ print >>sys.stderr, "{} ({}): started. argv: {}".format(
+        #~ element_class.__name__, worker_id, sys.argv
+    #~ )
 
     # create element
     e = element_class(mode='internal')
@@ -450,13 +450,8 @@ if __name__ == "__main__":
         r.write(sys.stdout)
         # flush once per record (so next element gets it immediately)
         sys.stdout.flush()
-        #~ # check limit ?
-        #~ if record_limit <= 0: continue
-        #~ # limit reached ?
-        #~ if record_limit <= e.output_count:
-            #~ break
 
-    print >>sys.stderr, "{} ({}): exiting. records in: {}, out: {}".format(
-        element_class.__name__, worker_id, e.input_count, e.output_count
-    )
+    #~ print >>sys.stderr, "{} ({}): exiting. records in: {}, out: {}".format(
+        #~ element_class.__name__, worker_id, e.input_count, e.output_count
+    #~ )
 
