@@ -12,10 +12,11 @@ class TestPip3(unittest.TestCase):
 
     def shuffle_src(self):
         """create possible source elements"""
+        # variations of mode='subprocess')
         for workers in [1, 5]:
             yield ExampleSource(mode='subprocess', parallel_workers=workers)
 
-        # default
+        # defaults
         yield ExampleSource()
 
 
@@ -32,7 +33,7 @@ class TestPip3(unittest.TestCase):
                     worker_limit=limit
                 )
 
-        # default
+        # defaults
         yield ExampleFunction()
 
 
@@ -49,6 +50,7 @@ class TestPip3(unittest.TestCase):
                         src, func, length, 10*src.parallel_workers
                     )
                 )
-                print >>sys.stderr, "---------------------------------------"
+                sys.stderr.write(".")
+                sys.stderr.flush()
 
 
