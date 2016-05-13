@@ -44,6 +44,8 @@ class Element(object):
 
         # amount of processes to fork()
         self.parallel_workers = parallel_workers
+        if parallel_workers <= 0:
+            raise ValueError("parallel_workers must be > 0")
         # restart subprocess after it has processed this many input records
         self.worker_limit = worker_limit
         # mode we are running in (internal, subprocess, ...)
