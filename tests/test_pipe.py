@@ -10,7 +10,7 @@ class TestPip3(unittest.TestCase):
     """jobpip3 tests"""
 
 
-    def shuffle_src(self):
+    def sources(self):
         """create possible source elements"""
         # variations of mode='subprocess')
         for workers in [1, 5]:
@@ -20,9 +20,9 @@ class TestPip3(unittest.TestCase):
         yield ExampleSource()
 
 
-    def shuffle_func(self):
+    def functions(self):
         """create possible function elements"""
-        # 1 - 20 parallel jobs
+        # various amounts of parallel workers
         for workers in [1, 10, 11]:
             # restart subprocess
             for limit in [1, 10, 11]:
@@ -38,19 +38,20 @@ class TestPip3(unittest.TestCase):
 
 
     def test_variation(self):
-        for src in self.shuffle_src():
-            for func in self.shuffle_func():
+        """test various combinations of pipe elements"""
+        for src in self.sources():
+            for func in self.functions():
                 r = src.flow()
                 r = func.flow(r)
                 length = len(list(r))
                 self.assertEqual(
                     length,
                     10*src.parallel_workers,
-                    msg="{} -> {} ({} instead of {} records)".format(
+                    msg="{} -> {} (got {} instead of {} records)".format(
                         src, func, length, 10*src.parallel_workers
                     )
                 )
-                sys.stderr.write(".")
-                sys.stderr.flush()
+                #sys.stderr.write(".")
+                #sys.stderr.flush()
 
 
