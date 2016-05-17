@@ -3,7 +3,7 @@ jobpip3 - information processing pipe framework
 
 
 
-= description =
+# description
 
 Information (in form of Record() objects) is passed down a Pipe that is
 formed by one or more Element() objects that are chained together.
@@ -16,7 +16,7 @@ Available pipe elements:
 A Record() is basically a dict-wrapper with additional checks and serialization.
 
 
-== topography examples ==
+## topography examples
 
 simple pipe:
 [SOURCE] -> [FUNCTION A] -> [FUNCTION B] -> [SINK]
@@ -29,6 +29,6 @@ pipe with one parallelized function (parallel=3):
 
 
 
-== usage examples ==
-...
+## usage examples
+tbd
 
