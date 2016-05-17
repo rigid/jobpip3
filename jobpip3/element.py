@@ -16,14 +16,18 @@ from record import Record
 
 
 class Element(object):
-    """a pipe element can have an input, a worker function and an output
-       to process Record() objects. The flow() function will serve as a
-       generator wrapper for the worker() method that does the actual job.
-
+    """a pipe element must implement the worker() method
+       The flow() function will serve as a generator wrapper 
+       for the worker() method that does the actual job.
+       The worker() method can run as normal generator (mode='internal')
+       or as (multiple) subprocesses (mode='subprocess') or on 
+       (multiple) remote hosts mode='remote'
+       
        child classes will:
            - set the InRecord and OutRecord class attribute to define the type
-             of records to process (default: record.Record)
+             of records to process/produce (default: record.Record)
            - implement a worker() method that generates and/or takes records"""
+           
     # set to True when we run on a POSIX system
     IS_POSIX = 'posix' in sys.builtin_module_names
 
