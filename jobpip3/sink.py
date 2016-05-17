@@ -8,7 +8,7 @@ class Sink(Element):
 
     def __init__(self, *args, **kwargs):
         super(Sink, self).__init__(*args, **kwargs)
-        # a sink doesn't produce output
+        # a sink doesn't produce output records
         self.OutRecord = None
 
 
