@@ -49,7 +49,8 @@ Simple example:
     records = func1.process(records)
     records = func2.process(records)
     sink.drain(records)
-```        
+```    
+
 
 Another simple example:
 
@@ -68,3 +69,37 @@ Another simple example:
        # save single record
        sink.drain(record)
 ```
+
+
+Run with multiple workers in parallel:
+
+```python
+
+    src = NumberSource()           # [{ 'i' : 1 }, { 'i' : 2 }, ... ]
+    func1 = MultiplyFunction(2, mode='subprocess', parallel_workers='4')
+    func2 = AddFunction(1, mode='subprocess', parallel_workers='4')
+    sink = CsvSink("foo.csv")      # writes csv
+    
+    # run pipe
+    records = src.well()
+    records = func1.process(records)
+    records = func2.process(records)
+    sink.drain(records)
+```       
+
+
+Distribute to remote host:
+
+```python
+
+    src = NumberSource()           # [{ 'i' : 1 }, { 'i' : 2 }, ... ]
+    func1 = MultiplyFunction(2, mode='remote', hosts=['ssh://foo@192.168.178.2', 'ssh://foo@192.168.178.3'], parallel_workers='2')
+    func2 = AddFunction(1, mode='subprocess', parallel_workers='4')
+    sink = CsvSink("foo.csv")      # writes csv
+    
+    # run pipe
+    records = src.well()
+    records = func1.process(records)
+    records = func2.process(records)
+    sink.drain(records)
+```   
