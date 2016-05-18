@@ -2,7 +2,8 @@
 
 import os
 import sys
-import select
+import json
+#import select
 import traceback
 import threading
 from subprocess import Popen, PIPE, STDOUT
@@ -32,6 +33,7 @@ class Element(object):
                  parallel_workers=1,
                  worker_limit=0,
                  mode='internal',
+                 *args,
                  **kwargs):
         """:param parallel_workers: launch this many parallel workers
            :param worker_limit: if >0, restart subprocess after n input or
@@ -67,6 +69,9 @@ class Element(object):
         self._workers = []
         # current process-id
         self._worker_id = 0
+        # args
+        self._args = args
+        self._kwargs = kwargs
 
 
     def __str__(self):
@@ -76,6 +81,8 @@ class Element(object):
             self.worker_limit,
             self.mode
         )
+
+
     @staticmethod
     def _excepthook(type, value, tb):
         """hook that will be called when a subprocess raises an exception"""
@@ -196,6 +203,7 @@ class Element(object):
             'writer' : None
         }
 
+
         # start subprocess
         p['process'] = Popen(
             [
@@ -210,7 +218,12 @@ class Element(object):
                 # incremental id of this process
                 "{}".format(self._worker_id),
                 # record limit
-                "{}".format(self.worker_limit)
+                "{}".format(self.worker_limit),
+                # args
+                json.dumps(self._args),
+                # kwargs
+                json.dumps(self._kwargs)
+
             ],
             stdin=PIPE, stdout=PIPE, stderr=sys.stderr,
             close_fds=Element.IS_POSIX,
@@ -429,13 +442,16 @@ if __name__ == "__main__":
     worker_id = int(sys.argv[3])
     # limit amount of records for this subprocess
     record_limit = int(sys.argv[4])
+    # arguments for elements
+    element_args = json.loads(sys.argv[5])
+    element_kwargs = json.loads(sys.argv[6])
 
     #~ print >>sys.stderr, "{} ({}): started. argv: {}".format(
         #~ element_class.__name__, worker_id, sys.argv
     #~ )
 
     # create element
-    e = element_class(mode='internal')
+    e = element_class(mode='internal', *element_args, **element_kwargs)
     # input records ?
     if e.InRecord is None:
         # element doesn't take input
