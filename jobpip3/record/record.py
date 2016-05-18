@@ -19,6 +19,9 @@ class Record(object):
         elif isinstance(args[0], (str, unicode)):
             self.parse(args[0])
 
+        # store classname
+        self['__classname__'] = self.__class__.__name__
+
 
     def __iter__(self):
         return self._dict.iterkeys()
