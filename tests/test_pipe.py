@@ -15,13 +15,23 @@ class TestPip3(unittest.TestCase):
         # variations of mode='subprocess')
         for workers in [1, 5]:
             yield ExampleSource(
-                foo="testFoo",
                 mode='subprocess',
-                parallel_workers=workers
+                parallel_workers=workers,
+                string="workers-test-{}".format(workers),
+                int=5,
+                float="Inf",
+                list=[4,5,6],
+                dict={'x':1, 'y':0}
             )
 
         # defaults
-        yield ExampleSource()
+        yield ExampleSource(
+            string="workers-test-{}".format(workers),
+            int=5,
+            float="Inf",
+            list=[4,5,6],
+            dict={'x':1, 'y':0}
+        )
 
 
     def functions(self):
@@ -47,7 +57,38 @@ class TestPip3(unittest.TestCase):
             for func in self.functions():
                 r = src.flow()
                 r = func.flow(r)
-                length = len(list(r))
+                length = 0
+                for record in r:
+                    self.assertEqual(
+                        record['int'],
+                        5+1,
+                        msg="{} -> {} ({} != {})".format(
+                            src, func, record['int'], 5+1
+                        )
+                    )
+                    self.assertEqual(
+                        record['float'],
+                        float("Inf"),
+                        msg="{} -> {} ({} != {})".format(
+                            src, func, record['float'], float("Inf")
+                        )
+                    )
+                    self.assertEqual(
+                        record['list'],
+                        [4,5,6],
+                        msg="{} -> {} ({} != {})".format(
+                            src, func, record['list'], [4,5,6]
+                        )
+                    )
+                    self.assertEqual(
+                        record['dict'],
+                        {'x':1, 'y':0},
+                        msg="{} -> {} ({} != {})".format(
+                            src, func, record['dict'], {'x':1, 'y':0}
+                        )
+                    )
+                    length += 1
+
                 self.assertEqual(
                     length,
                     10*src.parallel_workers,
@@ -55,6 +96,8 @@ class TestPip3(unittest.TestCase):
                         src, func, length, 10*src.parallel_workers
                     )
                 )
+
+
                 #sys.stderr.write(".")
                 #sys.stderr.flush()
 
