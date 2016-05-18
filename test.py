@@ -8,4 +8,4 @@ from tests.test_element import TestElement
 
 
 if __name__ == '__main__':
-    unittest.main()
+    unittest.main(verbosity=2, failfast=True)
