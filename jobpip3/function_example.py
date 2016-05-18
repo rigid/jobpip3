@@ -23,9 +23,6 @@ class ExampleFunction(Function):
             # add string
             record['added'] = "bar"
 
-            # change string
-            record['test'] = "changed"
-
             if 'int' in record:
                 record['int'] += 1
             else:
