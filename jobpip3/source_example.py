@@ -17,13 +17,18 @@ class ExampleSource(Source):
         # we will output TestRecord() objects
         self.OutRecord = ExampleRecord
 
+        # handle arguments
+        if 'foo' in kwargs: self.foo = kwargs['foo']
+        else: self.foo = "defaultFoo"
+
 
     def well(self):
 
         for i in xrange(10):
 
             record = ExampleRecord({
-                'test' : "foo",
+                'foo' : self.foo,
+                'string' : "bar",
                 'int' : 1,
                 'float' : 1.5,
                 'list' : [1,2,3],

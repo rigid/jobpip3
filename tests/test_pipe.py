@@ -14,7 +14,11 @@ class TestPip3(unittest.TestCase):
         """create possible source elements"""
         # variations of mode='subprocess')
         for workers in [1, 5]:
-            yield ExampleSource(mode='subprocess', parallel_workers=workers)
+            yield ExampleSource(
+                foo="testFoo",
+                mode='subprocess',
+                parallel_workers=workers
+            )
 
         # defaults
         yield ExampleSource()
