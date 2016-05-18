@@ -3,11 +3,17 @@
 
 
 from function import Function
-
+from source_example import ExampleRecord
 
 
 
 class ExampleFunction(Function):
+
+    def __init__(self, *args, **kwargs):
+        super(ExampleFunction, self).__init__(*args, **kwargs)
+
+        self.InRecord = ExampleRecord
+        self.OutRecord = ExampleRecord
 
 
     def process(self, records):
