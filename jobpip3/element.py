@@ -79,11 +79,13 @@ class Element(object):
 
 
     def __str__(self):
-        return "<{}(parallel_workers={}, worker_limit={}, mode={}) object>".format(
+        return "<{}({}parallel_workers={}, worker_limit={}, mode={}{}) object>".format(
             self.__class__.__name__,
+            self._args + ", args=" if self._args != () else "",
             self.parallel_workers,
             self.worker_limit,
-            self.mode
+            self.mode,
+            ", kwargs=" + unicode(self._kwargs) if self._kwargs != {} else ""
         )
 
 
@@ -470,7 +472,7 @@ if __name__ == "__main__":
     #~ )
 
     # create element
-    e = element_class(mode='internal', *element_args, **element_kwargs)
+    e = element_class(*element_args, mode='internal', **element_kwargs)
     # input records ?
     if e.InRecord is None:
         # element doesn't take input
