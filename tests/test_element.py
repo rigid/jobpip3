@@ -1,5 +1,6 @@
 
 import unittest
+from jobpip3.record import Record
 from jobpip3.element import Element
 
 
@@ -14,7 +15,7 @@ class Test1(Element):
 
     def worker(self, records):
         for i in xrange(RECORD_AMOUNT):
-            yield { 'i' : i, 'foo' : "bar" }
+            yield Record({ 'i' : i, 'foo' : "bar" })
 
 
 
