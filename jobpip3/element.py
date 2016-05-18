@@ -17,18 +17,18 @@ from record import Record
 
 
 class Element(object):
-    """a pipe element must implement the worker() method
-       The flow() function will serve as a generator wrapper 
+    """a pipe element must implement the worker() method.
+       The flow() function will serve as a generator wrapper
        for the worker() method that does the actual job.
        The worker() method can run as normal generator (mode='internal')
-       or as (multiple) subprocesses (mode='subprocess') or on 
+       or as (multiple) subprocesses (mode='subprocess') or on
        (multiple) remote hosts mode='remote'
-       
+
        child classes will:
            - set the InRecord and OutRecord class attribute to define the type
              of records to process/produce (default: record.Record)
            - implement a worker() method that generates and/or takes records"""
-           
+
     # set to True when we run on a POSIX system
     IS_POSIX = 'posix' in sys.builtin_module_names
 
@@ -361,6 +361,11 @@ class Element(object):
         def input_wrapper(records):
             """counting generator wrapper"""
             for record in records:
+                # check type
+                if record['__classname__'] != self.InRecord.__name__:
+                    raise TypeError("Got {} as input but expected {}".format(
+                        record['__classname__'], self.InRecord.__name__
+                    ))
                 # count input records
                 self.input_count += 1
                 # return record
@@ -372,6 +377,11 @@ class Element(object):
 
         # process all records
         for record in self.worker(input_wrapper(records)):
+            # check type
+            if record['__classname__'] != self.OutRecord.__name__:
+                raise TypeError("Got {} as output but expected {}".format(
+                    record['__classname__'], self.OutRecord.__name__
+                ))
             # return record
             yield record
             # count output records
@@ -427,6 +437,11 @@ if __name__ == "__main__":
     def input_wrapper(element):
         """counting generator wrapper"""
         for record in element.InRecord.read(sys.stdin):
+            # check type
+            if record['__classname__'] != element.InRecord.__name__:
+                raise TypeError("Got {} as input but expected {}".format(
+                    record['__classname__'], element.InRecord.__name__
+                ))
             # return record
             yield record
             # check limit ?
@@ -467,7 +482,11 @@ if __name__ == "__main__":
 
     # yield records from element
     for r in e.flow(input_records):
-
+        # check type
+        if r['__classname__'] != e.OutRecord.__name__:
+            raise TypeError("Got {} as output but expected {}".format(
+                r['__classname__'], e.OutRecord.__name__
+            ))
         # write record to parent process
         r.write(sys.stdout)
         # flush once per record (so next element gets it immediately)
