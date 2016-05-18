@@ -23,14 +23,16 @@ Available pipe elements:
 ## topography examples
 
 simple pipe:
+```
 [SOURCE] -> [FUNCTION A] -> [FUNCTION B] -> [SINK]
-
+```
 
 pipe with one parallelized function (mode='subprocess', parallel_workers=3):
+```
             [FUNCTION A]            
 [SOURCE] -> [FUNCTION A] -> [FUNCTION B] -> [SINK]
             [FUNCTION A]
-
+```
 
 
 ## usage examples
