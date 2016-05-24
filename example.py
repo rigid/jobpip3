@@ -12,7 +12,7 @@ if __name__ == "__main__":
     import sys
     from jobpip3.source_example import ExampleSource
     from jobpip3.function_example import ExampleFunction
-
+    from jobpip3.pipe import Pipe
 
     #~ # ------------------------------------------------------------------------
     #~ # default mode (simply use generator functions)
@@ -63,6 +63,16 @@ if __name__ == "__main__":
     records = func.flow(records)
 
     for r in records:
+        r.write(sys.stdout)
+
+    print "----------------------------------------------------------"
+
+
+    # ------------------------------------------------------------------------
+    # Pipe test
+    pipe = Pipe(ExampleSource(), [ ExampleFunction() ])
+
+    for r in pipe.run():
         r.write(sys.stdout)
 
     print "----------------------------------------------------------"
