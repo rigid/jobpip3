@@ -10,8 +10,8 @@
 # -----------------------------------------------------------------------------
 if __name__ == "__main__":
     import sys
-    from jobpip3.source_example import ExampleSource
-    from jobpip3.function_example import ExampleFunction
+    from jobpip3.sources import ExampleSource
+    from jobpip3.functions import ExampleFunction
     from jobpip3.pipe import Pipe
 
     #~ # ------------------------------------------------------------------------

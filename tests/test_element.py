@@ -1,7 +1,7 @@
 
 import unittest
 from jobpip3.record import Record
-from jobpip3.element import Element
+from jobpip3._element import Element
 
 
 RECORD_AMOUNT = 3

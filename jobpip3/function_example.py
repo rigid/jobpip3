@@ -2,7 +2,7 @@
    them and passes them further down the pipe"""
 
 
-from function import Function
+from _function import Function
 from source_example import ExampleRecord
 
 

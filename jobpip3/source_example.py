@@ -1,7 +1,7 @@
 """a test Source() that feeds records into a pipe"""
 
 import random
-from source import Source
+from _source import Source
 from record import Record
 
 

@@ -1,7 +1,5 @@
 
 
-
-
 class Pipe(object):
     """bundle source, functions and a sink"""
 

@@ -1,5 +1,5 @@
 
-from element import Element
+from _element import Element
 
 
 class Function(Element):

@@ -1,7 +1,7 @@
 """a test Sink() that takes records from a pipe and dumps them somewhere"""
 
 
-from sink import Sink
+from _sink import Sink
 
 
 
