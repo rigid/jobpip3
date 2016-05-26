@@ -5,6 +5,9 @@ import json
 
 class Record(object):
 
+    # file suffix for base record class output
+    FILE_SUFFIX = ".json"
+
 
     def __init__(self, *args):
 
