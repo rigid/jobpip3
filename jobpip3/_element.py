@@ -404,7 +404,7 @@ class Element(object):
             # use parallel threads ?
             if self.parallel_workers > 1:
                 raise NotImplementedError(
-                    "{}: parallel_workers={} and threading with mode='internal'"
+                    "{}: parallel_workers={} and threading with mode='internal' "
                     "not supported, yet".format(
                         self.__class__.__name__, self.parallel_workers
                     )
