@@ -1,10 +1,14 @@
 
+from _source import Source
+
+
 
 class Pipe(object):
     """bundle source, functions and a sink"""
 
     def __init__(self, source, processors=[], sink=None):
         self._source = source
+        if not isinstance(processors, list): processors = [ processors ]
         self._processors = processors
         self._sink = sink
 
@@ -20,10 +24,10 @@ class Pipe(object):
             r = processor.flow(records)
             records = r
 
-        # sink
+        # got no sink?
         if self._sink is None:
+            # return records
             return records
 
-        self._sink.flow(records)
-
-        return
+        # pass records to sink
+        return self._sink.flow(records)
