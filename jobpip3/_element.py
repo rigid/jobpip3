@@ -73,6 +73,16 @@ class Element(object):
         self._workers = []
         # current process-id
         self._worker_id = 0
+
+        # total amount of records seen by this processor (passed + dismissed)
+        self.total = 0
+        # amount of records that passed through this processor
+        self.passed = 0
+        # amount of records that were not passed on
+        self.dismissed = 0
+        # amount of records that were touched by this processor
+        self.modified = 0
+
         # args
         self._args = args
         self._kwargs = kwargs
@@ -363,15 +373,19 @@ class Element(object):
         def input_wrapper(records):
             """counting generator wrapper"""
             for record in records:
-                # check type
-                if record['__classname__'] != self.InRecord.__name__:
-                    raise TypeError("Got {} as input but expected {}".format(
-                        record['__classname__'], self.InRecord.__name__
-                    ))
+                # check if input records are of supported class
+                if not isinstance(record, self.InRecord):
+                    raise TypeError(
+                        "Got {} record as input but expected {} type".format(
+                            record['__classname__'], self.InRecord.__name__
+                        )
+                    )
                 # count input records
                 self.input_count += 1
+
                 # return record
                 yield record
+
 
         # is worker_limit set?
         if self.worker_limit > 0:
@@ -380,9 +394,9 @@ class Element(object):
         # process all records
         for record in self.worker(input_wrapper(records)):
             # check type
-            if record['__classname__'] != self.OutRecord.__name__:
+            if not isinstance(record, self.OutRecord):
                 raise TypeError("Got {} as output but expected {}".format(
-                    record['__classname__'], self.OutRecord.__name__
+                    record.__class__.__name__, self.OutRecord.__name__
                 ))
             # return record
             yield record
@@ -391,8 +405,10 @@ class Element(object):
 
 
     def flow(self, records=None):
-        """generator that yields records from this element and/or passes
-           records to it for processing them
+        """generator/method that yields records from this element and/or passes
+           records to it for processing them. Generator when Element() produces
+           records (self.OutRecord != None), method when not
+           (self.OutRecord == None)
            :param records: input records (optional)"""
 
         # got input records?
@@ -430,6 +446,24 @@ class Element(object):
             )
         )
 
+
+    def status(self):
+        """print current state of this processor"""
+
+        # calculate missing values
+        if self.total == 0 and (self.passed != 0 or self.dismissed != 0):
+            self.total = self.passed + self.dismissed
+        elif self.passed == 0 and (self.total != 0 or self.dismissed != 0):
+            self.passed = self.total - self.dismissed
+        elif self.dismissed == 0 and (self.total != 0 or self.passed != 0):
+            self.dismissed = self.total - self.passed
+
+        print >>STDERR, ("{0}: passed: {2}, dismissed: {3}, "
+                 "modified: {4}, total: {1}".format(
+                self.__class__.__name__,
+                self.total, self.passed, self.dismissed,
+                self.modified
+            ))
 
 
 # -----------------------------------------------------------------------------
