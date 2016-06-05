@@ -14,7 +14,8 @@ class Sink(Element):
 
     def worker(self, records):
         """actual worker method"""
-        return self.drain(records)
+        self.drain(records)
+        raise StopIteration()
 
 
     def drain(self, record):
