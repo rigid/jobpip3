@@ -1,4 +1,5 @@
 
+from itertools import chain
 from _source import Source
 
 
@@ -30,4 +31,7 @@ class Pipe(object):
             return records
 
         # pass records to sink
-        return self._sink.flow(records)
+        for r in self._sink.flow(records): pass
+
+        # return nothing
+        return
