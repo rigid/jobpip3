@@ -3,7 +3,6 @@
 import os
 import sys
 import json
-#import select
 import traceback
 import threading
 from subprocess import Popen, PIPE, STDOUT
@@ -257,7 +256,7 @@ class Element(object):
         p['reader'].start()
 
         # start thread to write input-records to subprocess
-        if self._has_input:
+        if self.InRecord is not None:
             p['writer'] = threading.Thread(
                 name="{} writer thread: {}".format(
                     self.__class__.__name__, self._worker_id
@@ -278,7 +277,7 @@ class Element(object):
         """manage flow of element by forking subprocesses"""
 
         # start feeder thread (feeds records from iterable to queue)
-        if self._has_input:
+        if self.InRecord is not None:
             self._feeder = threading.Thread(
                 name="{} feeder thread".format(self.__class__.__name__),
                 target=self._feed_thread,
@@ -337,7 +336,7 @@ class Element(object):
 
                 # relaunch process if a worker_limit is set and we still get
                 # input-data
-                if self._has_input and self.worker_limit > 0 and \
+                if self.InRecord is not None and self.worker_limit > 0 and \
                     (self._feeder.is_alive() or not self._inqueue.empty()):
 
                     #~ print >>sys.stderr, "{}: restarting subprocess {}".format(
@@ -411,9 +410,6 @@ class Element(object):
            (self.OutRecord == None)
            :param records: input records (optional)"""
 
-        # got input records?
-        if records is None: self._has_input = False
-        else: self._has_input = True
 
         # how should we run?
         if self.mode == 'internal':
@@ -458,11 +454,11 @@ class Element(object):
         elif self.dismissed == 0 and (self.total != 0 or self.passed != 0):
             self.dismissed = self.total - self.passed
 
-        print >>STDERR, ("{0}: passed: {2}, dismissed: {3}, "
-                 "modified: {4}, total: {1}".format(
+        print >>STDERR, ("{}: passed: {}, dismissed: {}, "
+                 "modified: {}, total: {}".format(
                 self.__class__.__name__,
-                self.total, self.passed, self.dismissed,
-                self.modified
+                self.passed, self.dismissed,
+                self.modified, self.total
             ))
 
 
