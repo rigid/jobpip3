@@ -55,6 +55,8 @@ class Element(object):
         self.worker_limit = worker_limit
         # mode we are running in (internal, subprocess, ...)
         self.mode = mode
+        # true, if we are running inside a subproccess
+        self.is_subprocess = False
         # class of input records
         self.InRecord = Record
         # class of output records
@@ -98,20 +100,43 @@ class Element(object):
         )
 
 
+    def _status(self):
+        """print current state of this processor"""
+
+        # calculate missing values
+        if self.total == 0 and (self.passed != 0 or self.dismissed != 0):
+            self.total = self.passed + self.dismissed
+        elif self.passed == 0 and (self.total != 0 or self.dismissed != 0):
+            self.passed = self.total - self.dismissed
+        elif self.dismissed == 0 and (self.total != 0 or self.passed != 0):
+            self.dismissed = self.total - self.passed
+
+        self.log("info", "{}: passed: {}, dismissed: {}, "
+                 "modified: {}, total: {}".format(
+                self.__class__.__name__,
+                self.passed, self.dismissed,
+                self.modified, self.total
+            )
+        )
+
+
     @staticmethod
     def _excepthook(type, value, tb):
         """hook that will be called when a subprocess raises an exception"""
         # output exception
-        print >> sys.stderr, "exception in subprocess {}".format(os.getpid())
-        print >> sys.stderr, traceback.format_exception(type, value, tb)
+        self.log("error", "exception in subprocess {}\n{}".format(
+            os.getpid(),
+            traceback.format_exception(type, value, tb)
+        ))
+
         # exit with error
         exit(os.EX_SOFTWARE)
 
 
-    def _write_thread(self, process):
+    def _input_record_writer(self, process):
         """write records from input-queue to subprocess"""
         thread = threading.currentThread()
-        #~ print >>sys.stderr, "{}: started".format(thread.name)
+        self.log("debug", "{}: started".format(thread.name))
 
         # count records of this thread
         records_per_thread = 0
@@ -139,9 +164,9 @@ class Element(object):
 
                 # limit reached ?
                 if self.worker_limit <= records_per_thread:
-                    #~ print >>sys.stderr, "{} reached limit: {}".format(
-                        #~ thread.name, self.worker_limit
-                    #~ )
+                    self.log("debug", "{} reached limit: {}".format(
+                        thread.name, self.worker_limit
+                    ))
                     break
 
             # no new input records
@@ -154,17 +179,17 @@ class Element(object):
                     # no more input - exit writer
                     break
 
-        #~ print >>sys.stderr, "{}: exited (in: {})".format(
-            #~ thread.name, records_per_thread
-        #~ )
+        self.log("debug", "{}: exited (in: {})".format(
+            thread.name, records_per_thread
+        ))
         process.stdin.flush()
         process.stdin.close()
 
 
-    def _read_thread(self, process):
+    def _output_record_reader(self, process):
         """read records from subprocess and write to output-queue"""
         thread = threading.currentThread()
-        #~ print >>sys.stderr, "{}: started".format(thread.name)
+        self.log("debug", "{}: started".format(thread.name))
 
         # count records of this thread
         records_per_thread = 0
@@ -180,16 +205,29 @@ class Element(object):
             # count output records for this thread
             records_per_thread += 1
 
-        #~ print >>sys.stderr, "{}: exited (out: {})".format(
-            #~ thread.name, records_per_thread
-        #~ )
+        self.log("debug", "{}: exited (out: {})".format(
+            thread.name, records_per_thread
+        ))
         process.stdout.close()
 
 
-    def _feed_thread(self, records):
-        """feed records to subprocess queue of this element"""
+    def _log_reader(self, process):
+        """read logging output from subprocess"""
+
+        tread = threading.currentThread()
+
+        try:
+            for line in process.stderr:
+                level, msg = line.split('|||', 1)
+                self.log(level, msg)
+        except ValueError:
+            self.log("error", line)
+
+
+    def _input_record_feeder(self, records):
+        """feed records to all subprocesses of this element"""
         thread = threading.currentThread()
-        #~ print >>sys.stderr, "{}: started".format(thread.name)
+        self.log("debug", "{}: started".format(thread.name))
 
         # count records of this thread
         records_per_thread = 0
@@ -202,9 +240,9 @@ class Element(object):
             #~ )
             records_per_thread += 1
 
-        #~ print >>sys.stderr, "{}: exited (records in: {})".format(
-            #~ thread.name, records_per_thread
-        #~ )
+        self.log("debug", "{}: exited (records in: {})".format(
+            thread.name, records_per_thread
+        ))
 
 
     def _launch_worker(self):
@@ -240,7 +278,7 @@ class Element(object):
                 json.dumps(self._kwargs)
 
             ],
-            stdin=PIPE, stdout=PIPE, stderr=sys.stderr,
+            stdin=PIPE, stdout=PIPE, stderr=PIPE,
             close_fds=Element.IS_POSIX,
         )
 
@@ -249,11 +287,22 @@ class Element(object):
             name="{} reader thread: {}".format(
                 self.__class__.__name__, self._worker_id
             ),
-            target=self._read_thread,
+            target=self._output_record_reader,
             args=(p['process'],)
         )
         # launch
         p['reader'].start()
+
+        # start thread to read logging output from subprocess
+        p['logger'] = threading.Thread(
+            name="{} logger thread: {}".format(
+                self.__class__.__name__, self._worker_id
+            ),
+            target=self._log_reader,
+            args=(p['process'],)
+        )
+        # launch
+        p['logger'].start()
 
         # start thread to write input-records to subprocess
         if self.InRecord is not None:
@@ -261,7 +310,7 @@ class Element(object):
                 name="{} writer thread: {}".format(
                     self.__class__.__name__, self._worker_id
                 ),
-                target=self._write_thread,
+                target=self._input_record_writer,
                 args=(p['process'],)
             )
             #launch
@@ -280,7 +329,7 @@ class Element(object):
         if self.InRecord is not None:
             self._feeder = threading.Thread(
                 name="{} feeder thread".format(self.__class__.__name__),
-                target=self._feed_thread,
+                target=self._input_record_feeder,
                 args=(records,)
             )
             self._feeder.start()
@@ -329,9 +378,9 @@ class Element(object):
                     continue
 
                 # unregister this worker
-                #~ print >>sys.stderr, "{}: subprocess {} exited ({})".format(
-                    #~ self.__class__.__name__, p['id'], p['process'].returncode
-                #~ )
+                self.log("debug", "{}: subprocess {} exited ({})".format(
+                    self.__class__.__name__, p['id'], p['process'].returncode
+                ))
                 self._workers.remove(p)
 
                 # relaunch process if a worker_limit is set and we still get
@@ -339,9 +388,9 @@ class Element(object):
                 if self.InRecord is not None and self.worker_limit > 0 and \
                     (self._feeder.is_alive() or not self._inqueue.empty()):
 
-                    #~ print >>sys.stderr, "{}: restarting subprocess {}".format(
-                        #~ self.__class__.__name__, p['id']
-                    #~ )
+                    self.log("debug", "{}: restarting subprocess {}".format(
+                        self.__class__.__name__, p['id']
+                    ))
                     # launch new worker
                     self._workers += [ self._launch_worker() ]
 
@@ -352,18 +401,17 @@ class Element(object):
             # no jobs left?
             if len(self._workers) == 0:
                 # exit
-                #~ print >>sys.stderr, "{}: no more subprocesses: exiting".format(
-                    #~ self.__class__.__name__
-                #~ )
+                self.log("debug", "{}: no more subprocesses: exiting".format(
+                    self.__class__.__name__
+                ))
                 break
-
-        #~ print >>sys.stderr, "{}: exited (in: {} out: {})".format(
-            #~ self.__class__.__name__, self.input_count, self.output_count
-        #~ )
 
         # block until all tasks are done
         self._outqueue.join()
         self._inqueue.join()
+
+        # status message
+        self._status()
 
 
     def _flow_internal(self, records):
@@ -402,6 +450,9 @@ class Element(object):
             # count output records
             self.output_count += 1
 
+        # status message
+        self._status()
+
 
     def flow(self, records=None):
         """generator/method that yields records from this element and/or passes
@@ -410,6 +461,11 @@ class Element(object):
            (self.OutRecord == None)
            :param records: input records (optional)"""
 
+        # reset counters
+        self.total = 0
+        self.dismissed = 0
+        self.passed = 0
+        self.modified = 0
 
         # how should we run?
         if self.mode == 'internal':
@@ -443,23 +499,20 @@ class Element(object):
         )
 
 
-    def status(self):
-        """print current state of this processor"""
+    def log(self, level, msg):
+        """logging wrapper to enable logging stderr output of subprocesses.
+           Logging inside an Element() object should only done with this method"""
 
-        # calculate missing values
-        if self.total == 0 and (self.passed != 0 or self.dismissed != 0):
-            self.total = self.passed + self.dismissed
-        elif self.passed == 0 and (self.total != 0 or self.dismissed != 0):
-            self.passed = self.total - self.dismissed
-        elif self.dismissed == 0 and (self.total != 0 or self.passed != 0):
-            self.dismissed = self.total - self.passed
+        # running in subprocess ?
+        if self.is_subprocess:
+    	    # log to stderr to send logging output back to parent process
+    	    # the format is "<loglevelname>|||<msg>" (will be parsed by _log_reader()
+            print >>sys.stderr, "{}|||{}".format(level, msg)
+        # running in main process ?
+        else:
+	    # use standard logging mechanism
+	    print >>sys.stderr, "{}: {}".format(level, msg)
 
-        print >>STDERR, ("{}: passed: {}, dismissed: {}, "
-                 "modified: {}, total: {}".format(
-                self.__class__.__name__,
-                self.passed, self.dismissed,
-                self.modified, self.total
-            ))
 
 
 # -----------------------------------------------------------------------------
@@ -497,13 +550,17 @@ if __name__ == "__main__":
     element_args = json.loads(sys.argv[5])
     element_kwargs = json.loads(sys.argv[6])
 
-    #~ print >>sys.stderr, "{} ({}): started. argv: {}".format(
-        #~ element_class.__name__, worker_id, sys.argv
-    #~ )
 
     # create element
     e = element_class(*element_args, mode='internal', **element_kwargs)
-    # input records ?
+    # mark as running inside subprocess
+    e.is_subprocess = True
+
+    e.log("debug", "{} ({}): started. argv: {}".format(
+        element_class.__name__, worker_id, sys.argv
+    ))
+
+    # got no input records ?
     if e.InRecord is None:
         # element doesn't take input
         input_records = None
@@ -524,7 +581,7 @@ if __name__ == "__main__":
         # flush once per record (so next element gets it immediately)
         sys.stdout.flush()
 
-    #~ print >>sys.stderr, "{} ({}): exiting. records in: {}, out: {}".format(
-        #~ element_class.__name__, worker_id, e.input_count, e.output_count
-    #~ )
+    e.log("debug", "{} ({}): exiting. records in: {}, out: {}".format(
+        element_class.__name__, worker_id, e.input_count, e.output_count
+    ))
 
