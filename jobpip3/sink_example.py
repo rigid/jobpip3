@@ -8,7 +8,9 @@ from _sink import Sink
 
 class ExampleSink(Sink):
 
-    def __init__(self):
+    def __init__(self, *args, **kwargs):
+        super(ExampleSink, self).__init__(*args, **kwargs)
+
         self._count = 0
 
 
