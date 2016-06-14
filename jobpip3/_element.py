@@ -10,7 +10,8 @@ from subprocess import Popen, PIPE, STDOUT
 try: from Queue import Queue, Empty, Full # python 2.x
 except ImportError: from queue import Queue, Empty, Full  # python 3.x
 
-from record import Record
+from . import log
+from .record import Record
 
 
 
@@ -111,7 +112,7 @@ class Element(object):
         elif self.dismissed == 0 and (self.total != 0 or self.passed != 0):
             self.dismissed = self.total - self.passed
 
-        self.log("info", "{}: passed: {}, dismissed: {}, "
+        log.info("{}: passed: {}, dismissed: {}, "
                  "modified: {}, total: {}".format(
                 self.__class__.__name__,
                 self.passed, self.dismissed,
@@ -124,10 +125,10 @@ class Element(object):
     def _excepthook(type, value, tb):
         """hook that will be called when a subprocess raises an exception"""
         # output exception
-        self.log("error", "exception in subprocess {}\n{}".format(
+        print >>sys.stderr, "exception in subprocess {}: {}".format(
             os.getpid(),
             traceback.format_exception(type, value, tb)
-        ))
+        )
 
         # exit with error
         exit(os.EX_SOFTWARE)
@@ -136,7 +137,7 @@ class Element(object):
     def _input_record_writer(self, process):
         """write records from input-queue to subprocess"""
         thread = threading.currentThread()
-        self.log("debug", "{}: started".format(thread.name))
+        log.debug("{}: started".format(thread.name))
 
         # count records of this thread
         records_per_thread = 0
@@ -150,13 +151,14 @@ class Element(object):
                 #~ )
                 # write to stdin of subprocess
                 record.write(process.stdin)
+                # release queue slot
+                self._inqueue.task_done()
+                # ensure subprocess gets record now
                 process.stdin.flush()
                 # count input records for all threads
                 self.input_count += 1
                 # count output records for this thread
                 records_per_thread += 1
-                # release queue slot
-                self._inqueue.task_done()
                 # check limit ?
                 if self.worker_limit <= 0:
                     # no limit set
@@ -164,7 +166,7 @@ class Element(object):
 
                 # limit reached ?
                 if self.worker_limit <= records_per_thread:
-                    self.log("debug", "{} reached limit: {}".format(
+                    log.debug("{} reached limit: {}".format(
                         thread.name, self.worker_limit
                     ))
                     break
@@ -179,7 +181,7 @@ class Element(object):
                     # no more input - exit writer
                     break
 
-        self.log("debug", "{}: exited (in: {})".format(
+        log.debug("{}: exited (in: {})".format(
             thread.name, records_per_thread
         ))
         process.stdin.flush()
@@ -189,10 +191,11 @@ class Element(object):
     def _output_record_reader(self, process):
         """read records from subprocess and write to output-queue"""
         thread = threading.currentThread()
-        self.log("debug", "{}: started".format(thread.name))
+        log.debug("{}: started".format(thread.name))
 
         # count records of this thread
         records_per_thread = 0
+
         # read one record per line from subprocess
         for record in self.OutRecord.read(process.stdout):
             # put newly read record into queue
@@ -205,7 +208,7 @@ class Element(object):
             # count output records for this thread
             records_per_thread += 1
 
-        self.log("debug", "{}: exited (out: {})".format(
+        log.debug("{}: exited (out: {})".format(
             thread.name, records_per_thread
         ))
         process.stdout.close()
@@ -216,18 +219,20 @@ class Element(object):
 
         tread = threading.currentThread()
 
-        try:
-            for line in process.stderr:
-                level, msg = line.split('|||', 1)
-                self.log(level, msg)
-        except ValueError:
-            self.log("error", line)
+        for line in process.stderr:
+            # if we put it on stderr, it will be <level>|||<msg>
+            if "|||" in line:
+                level, msg = line.split("|||", 1)
+                log.log(level, msg)
+            # if not, default to ERROR loglevel
+            else:
+                log.log("error", line)
 
 
     def _input_record_feeder(self, records):
         """feed records to all subprocesses of this element"""
         thread = threading.currentThread()
-        self.log("debug", "{}: started".format(thread.name))
+        log.debug("{}: started".format(thread.name))
 
         # count records of this thread
         records_per_thread = 0
@@ -240,7 +245,7 @@ class Element(object):
             #~ )
             records_per_thread += 1
 
-        self.log("debug", "{}: exited (records in: {})".format(
+        log.debug("{}: exited (records in: {})".format(
             thread.name, records_per_thread
         ))
 
@@ -258,12 +263,35 @@ class Element(object):
 
 
         # start subprocess
+        log.debug("{}: launching subprocess, cwd={}, args={}".format(
+            self.__class__.__name__,
+            os.path.split(os.path.dirname(__file__))[0],
+            "[{}, {}, {}, {}, {}, {}]".format(
+                # name of element module
+                self.__class__.__module__.split('.')[-1],
+                # element class name
+                self.__class__.__name__,
+                # incremental id of this process
+                "{}".format(self._worker_id),
+                # record limit
+                "{}".format(self.worker_limit),
+                # args
+                json.dumps(self._args),
+                # kwargs
+                json.dumps(self._kwargs)
+            )
+        ))
+
         p['process'] = Popen(
             [
                 # python interpreter
                 sys.executable,
+                # run as module
+                "-m",
                 # ourself with __name__ == __main__
-                __file__,
+                __name__,
+                # loglevel
+                log.getLevel(),
                 # name of element module
                 self.__class__.__module__.split('.')[-1],
                 # element class name
@@ -278,20 +306,10 @@ class Element(object):
                 json.dumps(self._kwargs)
 
             ],
+            cwd=os.path.split(os.path.dirname(__file__))[0],
             stdin=PIPE, stdout=PIPE, stderr=PIPE,
             close_fds=Element.IS_POSIX,
         )
-
-        # start thread to read result-records from subprocesses
-        p['reader'] = threading.Thread(
-            name="{} reader thread: {}".format(
-                self.__class__.__name__, self._worker_id
-            ),
-            target=self._output_record_reader,
-            args=(p['process'],)
-        )
-        # launch
-        p['reader'].start()
 
         # start thread to read logging output from subprocess
         p['logger'] = threading.Thread(
@@ -303,6 +321,17 @@ class Element(object):
         )
         # launch
         p['logger'].start()
+
+        # start thread to read result-records from subprocesses
+        p['reader'] = threading.Thread(
+            name="{} reader thread: {}".format(
+                self.__class__.__name__, self._worker_id
+            ),
+            target=self._output_record_reader,
+            args=(p['process'],)
+        )
+        # launch
+        p['reader'].start()
 
         # start thread to write input-records to subprocess
         if self.InRecord is not None:
@@ -342,14 +371,13 @@ class Element(object):
         while True:
             try:
                 record = self._outqueue.get(timeout=0.1)
-                # collect result records
+                # release queue slot
+                self._outqueue.task_done()
                 #~ print >>sys.stderr, "{}: record outqueue -> iterable".format(
                     #~ self.__class__.__name__
                 #~ )
                 # return record
                 yield record
-                # release queue slot
-                self._outqueue.task_done()
 
             # currently no output records in queue
             except Empty:
@@ -378,7 +406,7 @@ class Element(object):
                     continue
 
                 # unregister this worker
-                self.log("debug", "{}: subprocess {} exited ({})".format(
+                log.debug("{}: subprocess {} exited ({})".format(
                     self.__class__.__name__, p['id'], p['process'].returncode
                 ))
                 self._workers.remove(p)
@@ -388,7 +416,7 @@ class Element(object):
                 if self.InRecord is not None and self.worker_limit > 0 and \
                     (self._feeder.is_alive() or not self._inqueue.empty()):
 
-                    self.log("debug", "{}: restarting subprocess {}".format(
+                    log.debug("{}: restarting subprocess {}".format(
                         self.__class__.__name__, p['id']
                     ))
                     # launch new worker
@@ -401,7 +429,7 @@ class Element(object):
             # no jobs left?
             if len(self._workers) == 0:
                 # exit
-                self.log("debug", "{}: no more subprocesses: exiting".format(
+                log.debug("{}: no more subprocesses: exiting".format(
                     self.__class__.__name__
                 ))
                 break
@@ -422,11 +450,9 @@ class Element(object):
             for record in records:
                 # check if input records are of supported class
                 if not isinstance(record, self.InRecord):
-                    raise TypeError(
-                        "Got {} record as input but expected {} type".format(
-                            record['__classname__'], self.InRecord.__name__
-                        )
-                    )
+                    # convert it
+                    record = self.InRecord(record)
+
                 # count input records
                 self.input_count += 1
 
@@ -499,34 +525,21 @@ class Element(object):
         )
 
 
-    def log(self, level, msg):
-        """logging wrapper to enable logging stderr output of subprocesses.
-           Logging inside an Element() object should only done with this method"""
-
-        # running in subprocess ?
-        if self.is_subprocess:
-    	    # log to stderr to send logging output back to parent process
-    	    # the format is "<loglevelname>|||<msg>" (will be parsed by _log_reader()
-            print >>sys.stderr, "{}|||{}".format(level, msg)
-        # running in main process ?
-        else:
-	    # use standard logging mechanism
-	    print >>sys.stderr, "{}: {}".format(level, msg)
 
 
 
 # -----------------------------------------------------------------------------
 if __name__ == "__main__":
+    import os
     import importlib
 
     def input_wrapper(element):
         """counting generator wrapper"""
         for record in element.InRecord.read(sys.stdin):
             # check type
-            if record['__classname__'] != element.InRecord.__name__:
-                raise TypeError("Got {} as input but expected {}".format(
-                    record['__classname__'], element.InRecord.__name__
-                ))
+            if not isinstance(record, element.InRecord):
+                # convert it
+                record = element.InRecord(record)
             # return record
             yield record
             # check limit ?
@@ -537,26 +550,31 @@ if __name__ == "__main__":
 
     # set exception hook to handle exceptions in this subprocess
     sys.excepthook = Element._excepthook
-
+    # get name of our package
+    package = os.path.split(os.path.dirname(__file__))[-1]
+    # current loglevel of parent process
+    loglevel=sys.argv[1]
     # the module to import the element class from
-    element_module = importlib.import_module(sys.argv[1])
+    element_module = importlib.import_module(package + "." + sys.argv[2])
     # element class
-    element_class = getattr(element_module, sys.argv[2])
+    element_class = getattr(element_module, sys.argv[3])
     # incremental id of this subprocess
-    worker_id = int(sys.argv[3])
+    worker_id = int(sys.argv[4])
     # limit amount of records for this subprocess
-    record_limit = int(sys.argv[4])
+    record_limit = int(sys.argv[5])
     # arguments for elements
-    element_args = json.loads(sys.argv[5])
-    element_kwargs = json.loads(sys.argv[6])
+    element_args = json.loads(sys.argv[6])
+    element_kwargs = json.loads(sys.argv[7])
 
+    # initialize logging
+    log.init(instance=element_class.__name__, console=True, level=loglevel)
 
     # create element
     e = element_class(*element_args, mode='internal', **element_kwargs)
     # mark as running inside subprocess
     e.is_subprocess = True
 
-    e.log("debug", "{} ({}): started. argv: {}".format(
+    log.debug("subprocess {} ({}): started. argv: {}".format(
         element_class.__name__, worker_id, sys.argv
     ))
 
@@ -571,17 +589,12 @@ if __name__ == "__main__":
 
     # yield records from element
     for r in e.flow(input_records):
-        # check type
-        if r['__classname__'] != e.OutRecord.__name__:
-            raise TypeError("Got {} as output but expected {}".format(
-                r['__classname__'], e.OutRecord.__name__
-            ))
-        # write record to parent process
+        # write result record to parent process
         r.write(sys.stdout)
         # flush once per record (so next element gets it immediately)
         sys.stdout.flush()
 
-    e.log("debug", "{} ({}): exiting. records in: {}, out: {}".format(
+    log.debug("{} ({}): exiting. records in: {}, out: {}".format(
         element_class.__name__, worker_id, e.input_count, e.output_count
     ))
 
