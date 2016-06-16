@@ -3,6 +3,7 @@
 import os
 import sys
 import json
+import time
 import traceback
 import threading
 from subprocess import Popen, PIPE, STDOUT
@@ -36,6 +37,7 @@ class Element(object):
     def __init__(self,
                  parallel_workers=1,
                  worker_limit=0,
+                 input_queue_len=5,
                  mode='internal',
                  *args,
                  **kwargs):
@@ -43,6 +45,9 @@ class Element(object):
            :param worker_limit: if >0, restart subprocess after n input or
                 output records. Elements without inputs are not restarted but
                 just cut off.
+           :param input_queue_len: If this many records have been written to
+                the stdin of a subprocess, stop writing until subprocess reads
+                another record
            :param mode:
                 - 'internal' to run element as normal generator (parallel_workers
                 will always be 1)
@@ -52,6 +57,7 @@ class Element(object):
         self.parallel_workers = parallel_workers
         if parallel_workers <= 0:
             raise ValueError("parallel_workers must be > 0")
+
         # restart subprocess after it has processed this many input records
         self.worker_limit = worker_limit
         # mode we are running in (internal, subprocess, ...)
@@ -75,6 +81,10 @@ class Element(object):
         self._workers = []
         # current process-id
         self._worker_id = 0
+        # amount of records to buffer in stdin of subprocess
+        self.input_queue_len = input_queue_len \
+            if self.worker_limit <= input_queue_len \
+            else self.worker_limit
 
         # total amount of records seen by this processor (passed + dismissed)
         self.total = 0
@@ -125,7 +135,7 @@ class Element(object):
     def _excepthook(type, value, tb):
         """hook that will be called when a subprocess raises an exception"""
         # output exception
-        print >>sys.stderr, "exception in subprocess {}: {}".format(
+        print >>sys.stderr, "LOG:exception in subprocess {}: {}".format(
             os.getpid(),
             traceback.format_exception(type, value, tb)
         )
@@ -134,38 +144,42 @@ class Element(object):
         exit(os.EX_SOFTWARE)
 
 
-    def _input_record_writer(self, process):
-        """write records from input-queue to subprocess"""
+    def _input_record_writer(self, worker):
+        """write records from input-queue to subprocess' stdin"""
         thread = threading.currentThread()
         log.debug("{}: started".format(thread.name))
 
-        # count records of this thread
-        records_per_thread = 0
         # keep writing records
         while True:
+            # don't queue more than 2 records to subprocess at once
+            if worker['input_queue_len'] > self.input_queue_len:
+                # wait and retry
+                time.sleep(0.025)
+                continue
+
             try:
                 # get record from queue (the main feeder thread put it there)
-                record = self._inqueue.get(timeout=0.1)
+                record = self._inqueue.get(timeout=0.025)
                 #~ print >>sys.stderr, "{}: record inqueue -> stdin".format(
                     #~ thread.name
                 #~ )
                 # write to stdin of subprocess
-                record.write(process.stdin)
+                record.write(worker['process'].stdin)
                 # release queue slot
                 self._inqueue.task_done()
-                # ensure subprocess gets record now
-                process.stdin.flush()
+                # another record written to stdin
+                worker['input_queue_len'] += 1
                 # count input records for all threads
                 self.input_count += 1
                 # count output records for this thread
-                records_per_thread += 1
+                worker['records_written'] += 1
                 # check limit ?
                 if self.worker_limit <= 0:
                     # no limit set
                     continue
 
                 # limit reached ?
-                if self.worker_limit <= records_per_thread:
+                if self.worker_limit <= worker['records_written']:
                     log.debug("{} reached limit: {}".format(
                         thread.name, self.worker_limit
                     ))
@@ -182,22 +196,19 @@ class Element(object):
                     break
 
         log.debug("{}: exited (in: {})".format(
-            thread.name, records_per_thread
+            thread.name, worker['records_written']
         ))
-        process.stdin.flush()
-        process.stdin.close()
+
+        worker['process'].stdin.close()
 
 
-    def _output_record_reader(self, process):
-        """read records from subprocess and write to output-queue"""
+    def _output_record_reader(self, worker):
+        """read records from subprocess stdout and write to output-queue"""
         thread = threading.currentThread()
         log.debug("{}: started".format(thread.name))
 
-        # count records of this thread
-        records_per_thread = 0
-
         # read one record per line from subprocess
-        for record in self.OutRecord.read(process.stdout):
+        for record in self.OutRecord.read(worker['process'].stdout):
             # put newly read record into queue
             self._outqueue.put(record)
             #~ print >>sys.stderr, "{}: record stdout -> outqueue".format(
@@ -206,36 +217,61 @@ class Element(object):
             # count output records for all threads
             self.output_count += 1
             # count output records for this thread
-            records_per_thread += 1
+            worker['records_read'] += 1
 
         log.debug("{}: exited (out: {})".format(
-            thread.name, records_per_thread
+            thread.name, worker['records_read']
         ))
-        process.stdout.close()
+        worker['process'].stdout.close()
 
 
-    def _log_reader(self, process):
-        """read logging output from subprocess"""
+    def _feedback_reader(self, worker):
+        """read status & logging output from subprocess stderr"""
 
         tread = threading.currentThread()
 
-        for line in process.stderr:
-            # if we put it on stderr, it will be <level>|||<msg>
-            if "|||" in line:
-                level, msg = line.split("|||", 1)
-                log.log(level, msg)
-            # if not, default to ERROR loglevel
+        for line in worker['process'].stderr:
+            # lines from subprocess will be in the format "<keyword>:<payload"
+            keyword, payload = line.split(":", 1)
+            # keyword is always uppercase
+            keyword = keyword.upper()
+            # strip payload string
+            payload = payload.strip()
+
+            # log msg ?
+            if keyword == "LOG":
+                # if we put it on stderr, it will be <level>|||<msg>
+                if "|||" in payload:
+                    level, msg = payload.split("|||", 1)
+                    log.log(level, msg)
+
+                # unformatted log message
+                else:
+                    log.error(payload)
+
+            # status msg ?
+            elif keyword == "STATUS":
+                # subprocess fetched another record from stdin
+                if payload == "record read":
+                    # decrement counter
+                    worker['input_queue_len'] -= 1
+                else:
+                    log.warn("got unknown STATUS from subprocess: \"{}\"".format(
+                        payload
+                    ))
+            # if anything fails, print line as error
             else:
-                log.log("error", line)
+                log.error(line.strip())
 
 
     def _input_record_feeder(self, records):
-        """feed records to all subprocesses of this element"""
+        """feed records to input queue (all subprocesses of this element)"""
         thread = threading.currentThread()
         log.debug("{}: started".format(thread.name))
 
-        # count records of this thread
-        records_per_thread = 0
+        # amount of records fed to workers
+        records_fed = 0
+
         # keep feeding
         for record in records:
             # put another record in the queue
@@ -243,22 +279,35 @@ class Element(object):
             #~ print >>sys.stderr, "{}: record iterable -> inqueue".format(
                 #~ thread.name
             #~ )
-            records_per_thread += 1
+            records_fed += 1
 
         log.debug("{}: exited (records in: {})".format(
-            thread.name, records_per_thread
+            thread.name, records_fed
         ))
 
 
     def _launch_worker(self):
         """launch one subprocess"""
 
-        # process descriptor, holding all info of a subprocess
-        p = {
+        # worker descriptor, holding all info of a subprocess
+        w = {
+            # id of this worker subprocess
             'id' : self._worker_id,
+            # result of Popen
             'process' : None,
+            # _feedback_reader() thread of this subprocess
+            'fedback' : None,
+            # _output_record_reader() thread
             'reader' : None,
-            'writer' : None
+            # _input_record_writer() thread
+            'writer' : None,
+            # amount of records written to stdin of this
+            # subprocess but have not been read, yet
+            'input_queue_len' : 0,
+            # amount of records read in reader thread
+            'records_read' : 0,
+            # amount of records written in writer thread
+            'records_written' : 0
         }
 
 
@@ -282,7 +331,7 @@ class Element(object):
             )
         ))
 
-        p['process'] = Popen(
+        w['process'] = Popen(
             [
                 # python interpreter
                 sys.executable,
@@ -306,49 +355,51 @@ class Element(object):
                 json.dumps(self._kwargs)
 
             ],
+            # use line-buffering
+            #bufsize=1,
             cwd=os.path.split(os.path.dirname(__file__))[0],
             stdin=PIPE, stdout=PIPE, stderr=PIPE,
             close_fds=Element.IS_POSIX,
         )
 
-        # start thread to read logging output from subprocess
-        p['logger'] = threading.Thread(
+        # start thread to read status & logging output from subprocess
+        w['feedback'] = threading.Thread(
             name="{} logger thread: {}".format(
                 self.__class__.__name__, self._worker_id
             ),
-            target=self._log_reader,
-            args=(p['process'],)
+            target=self._feedback_reader,
+            args=(w,)
         )
         # launch
-        p['logger'].start()
+        w['feedback'].start()
 
         # start thread to read result-records from subprocesses
-        p['reader'] = threading.Thread(
+        w['reader'] = threading.Thread(
             name="{} reader thread: {}".format(
                 self.__class__.__name__, self._worker_id
             ),
             target=self._output_record_reader,
-            args=(p['process'],)
+            args=(w,)
         )
         # launch
-        p['reader'].start()
+        w['reader'].start()
 
         # start thread to write input-records to subprocess
         if self.InRecord is not None:
-            p['writer'] = threading.Thread(
+            w['writer'] = threading.Thread(
                 name="{} writer thread: {}".format(
                     self.__class__.__name__, self._worker_id
                 ),
                 target=self._input_record_writer,
-                args=(p['process'],)
+                args=(w,)
             )
-            #launch
-            p['writer'].start()
+            # launch
+            w['writer'].start()
 
         # new id
         self._worker_id += 1
 
-        return p
+        return w
 
 
     def _flow_subprocess(self, records):
@@ -536,6 +587,8 @@ if __name__ == "__main__":
     def input_wrapper(element):
         """counting generator wrapper"""
         for record in element.InRecord.read(sys.stdin):
+            # notify parent process that another record has been read
+            print >>sys.stderr, "STATUS:record read"
             # check type
             if not isinstance(record, element.InRecord):
                 # convert it
@@ -567,7 +620,7 @@ if __name__ == "__main__":
     element_kwargs = json.loads(sys.argv[7])
 
     # initialize logging
-    log.init(instance=element_class.__name__, console=True, level=loglevel)
+    log.init(instance=element_class.__name__, stream=True, level=loglevel)
 
     # create element
     e = element_class(*element_args, mode='internal', **element_kwargs)
@@ -591,8 +644,6 @@ if __name__ == "__main__":
     for r in e.flow(input_records):
         # write result record to parent process
         r.write(sys.stdout)
-        # flush once per record (so next element gets it immediately)
-        sys.stdout.flush()
 
     log.debug("{} ({}): exiting. records in: {}, out: {}".format(
         element_class.__name__, worker_id, e.input_count, e.output_count
