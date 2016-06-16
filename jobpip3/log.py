@@ -1,11 +1,17 @@
 
 # wrapper module for panoracle logging
 
+import os
 import logging
 import inspect
 
 
+# main logger instance
 logger = None
+# stderr logger
+console_logger = None
+# stream logger (parseable output to be sent within a stream)
+stream_logger = None
 
 # custom loglevels
 logging.NOISY = logging.DEBUG - 1
@@ -28,104 +34,116 @@ def _construct(msg, level):
 
 
 # ------------------------------------------------------------------------------
-def init(instance="jobpip3", level="info", console=False):
+def init(instance="jobpip3", level="info", console=False, stream=False):
     """initialize logging mechanism for an instance.
-       :param instance Name of this instance (e.g. program name)
-       :param level The current loglevel (s. _level_to_string)
-       :param console Output to stderr if true"""
+       :param instance: Name of this instance (e.g. program name)
+       :param level: The current loglevel (s. _level_to_string)
+       :param console: output to stderr if true
+       :param stream: output to stderr in parseable format"""
 
     # add custom levels
     logging.addLevelName(logging.NOISY, "NOISY")
     logging.addLevelName(logging.VERYNOISY, "VERYNOISY")
 
+    # environment variable takes precedence
+    level = os.getenv('LOG_LEVEL', level)
+    console = bool(os.getenv('LOG_CONSOLE', console))
+
     # main logger
     global logger
     logger = logging.getLogger(instance)
 
-    # console logger
-    if console is True:
-        console = logging.StreamHandler()
-        console.setLevel(logging.getLevelName(level.upper()))
-        console.setFormatter(
-            logging.Formatter('%(levelname)-8s|||%(message)s')
+    # stream logger ?
+    if stream:
+        stream_logger = logging.StreamHandler()
+        stream_logger.setFormatter(
+            logging.Formatter('LOG:%(levelname)s|||%(message)s')
         )
-        logger.addHandler(console)
+        logger.addHandler(stream_logger)
+
+    # console logger
+    elif console:
+        console_logger = logging.StreamHandler()
+        console_logger.setFormatter(
+            logging.Formatter('%(message)s')
+        )
+        logger.addHandler(console_logger)
+
+    # set level
+    setLevel(level)
 
 
 def log(level, msg):
     """ wrapper to call logger directly"""
     if logger is None: init()
-    # need to convert loglevel ?
-    if not isinstance(level, int):
-        # convert to int
-        level = logging.getLevelName(
-            level.strip().upper()
-        )
+    # convert level if necessary
+    if not isinstance(level, int): level = convertLevel(level)
+
     # pass through to logger
     logger.log(level, msg)
 
 
 def verynoisy(msg):
     """custom level logger"""
-    if logger is None:
-        init()
-    logger.log(logging.VERYNOISY, _construct(msg, logging.VERYNOISY))
+    log(logging.VERYNOISY, _construct(msg, logging.VERYNOISY))
 
 
 def noisy(msg):
-    """custom level logger"""
-    if logger is None:
-        init()
-    logger.log(logging.NOISY, _construct(msg, logging.NOISY))
+    log(logging.NOISY, _construct(msg, logging.NOISY))
 
 
 def debug(msg):
     """wrapper"""
-    if logger is None:
-        init()
-    logger.log(logging.DEBUG, _construct(msg, logging.DEBUG))
+    log(logging.DEBUG, _construct(msg, logging.DEBUG))
 
 
 def info(msg):
     """wrapper"""
-    if logger is None:
-        init()
-    logger.log(logging.INFO, _construct(msg, logging.INFO))
+    log(logging.INFO, _construct(msg, logging.INFO))
 
 
 def warn(msg):
     """wrapper"""
-    if logger is None:
-        init()
-    logger.log(logging.WARN, _construct(msg, logging.WARN))
+    log(logging.WARN, _construct(msg, logging.WARN))
 
 
 def error(msg):
     """wrapper"""
-    if logger is None:
-        init()
-    logger.log(logging.ERROR, _construct(msg, logging.ERROR))
+    log(logging.ERROR, _construct(msg, logging.ERROR))
 
 
 def critical(msg):
     """wrapper"""
-    if logger is None:
-        init()
-    logger.log(logging.CRITICAL, _construct(msg, logging.CRITICAL))
+    log(logging.CRITICAL, _construct(msg, logging.CRITICAL))
 
 
 def setLevel(level):
     """set maximum loglevel"""
-    if logger is None:
-        init()
-    logger.setLevel(level.upper())
-    console.setLevel(level.upper())
+    if logger is None: init()
+
+    if not isinstance(level, int): level = convertLevel(level)
+
+    if console_logger is not None:
+        console_logger.setLevel(level)
+
+    if stream_logger is not None:
+        stream_logger.setLevel(level)
+
+    logger.setLevel(level)
 
 
 def getLevel():
     """get current loglevel"""
-    if logger is None:
-        init()
-    return logging.getLevelName(logger.getEffectiveLevel())
+    if logger is None: init()
+    return convertLevel(logger.getEffectiveLevel())
 
 
+def convertLevel(level):
+    """convert level from string to int or from int to string"""
+
+    # convert to string ?
+    if isinstance(level, int):
+        return logging.getLevelName(level)
+
+    # convert to int
+    return logging.getLevelName(level.strip().upper())
