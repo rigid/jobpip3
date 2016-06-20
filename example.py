@@ -57,7 +57,7 @@ if __name__ == "__main__":
     # create subprocesses + run in parallel + restart every 2 records
 
     src = ExampleSource(foo="bar", mode='subprocess')
-    func = ExampleFunction(mode='subprocess', parallel_workers=1, worker_limit=1)
+    func = ExampleFunction(mode='subprocess', parallel_workers=2, worker_limit=1)
 
     records = src.flow()
     records = func.flow(records)
