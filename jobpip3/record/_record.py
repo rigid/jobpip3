@@ -144,11 +144,12 @@ class Record(object):
         # newline indicates end of record
         fd.write('\n')
 
-
     def parse(self, string):
         try: self._dict = json.loads(string)
         except ValueError as e:
-            raise ValueError("{0}\nCould not parse: {1}".format(e, string))
+            raise ValueError("{}\nCould not parse: {} ({})".format(
+                e, string, len(string))
+            )
 
 
     @classmethod
