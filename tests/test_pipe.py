@@ -24,6 +24,19 @@ class TestPip3(unittest.TestCase):
                 dict={'x':1, 'y':0}
             )
 
+        # quick sources
+        for workers in [1, 5]:
+            yield ExampleSource(
+                mode='subprocess',
+                quick=True,
+                parallel_workers=workers,
+                string="workers-test-{}".format(workers),
+                int=5,
+                float="Inf",
+                list=[4,5,6],
+                dict={'x':1, 'y':0}
+            )
+
         # defaults
         yield ExampleSource(
             string="workers-test-{}".format(workers),
