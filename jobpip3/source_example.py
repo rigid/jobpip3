@@ -24,6 +24,8 @@ class ExampleSource(Source):
         self.OutRecord = ExampleRecord
 
         # handle arguments
+        if 'count' in kwargs: self.count = int(kwargs['count'])
+        else: self.count = 10
         if 'string' in kwargs: self.string = unicode(kwargs['string'])
         else: self.string = "foo"
         if 'int' in kwargs: self.int = int(kwargs['int'])
@@ -38,7 +40,7 @@ class ExampleSource(Source):
 
     def well(self):
 
-        for i in xrange(10):
+        for i in xrange(self.count):
 
             record = ExampleRecord({
                 'string' : self.string,
