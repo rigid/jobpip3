@@ -9,9 +9,9 @@ import inspect
 # main logger instance
 logger = None
 # stderr logger
-console_logger = None
+console_handler = None
 # stream logger (parseable output to be sent within a stream)
-stream_logger = None
+stream_handler = None
 
 # custom loglevels
 logging.NOISY = logging.DEBUG - 1
@@ -55,19 +55,25 @@ def init(instance="jobpip3", level="info", console=False, stream=False):
 
     # stream logger ?
     if stream:
-        stream_logger = logging.StreamHandler()
-        stream_logger.setFormatter(
+        global stream_handler
+        stream_handler = logging.StreamHandler()
+        stream_handler.setFormatter(
             logging.Formatter('LOG:%(levelname)s|||%(message)s')
         )
-        logger.addHandler(stream_logger)
+        logger.addHandler(stream_handler)
 
     # console logger
     elif console:
-        console_logger = logging.StreamHandler()
-        console_logger.setFormatter(
+        global console_handler
+        console_handler = logging.StreamHandler()
+        console_handler.setFormatter(
             logging.Formatter('%(message)s')
         )
-        logger.addHandler(console_logger)
+        logger.addHandler(console_handler)
+
+    # create null-handler if there's no other handler
+    if not stream and not console:
+        logger.addHandler(logging.NullHandler())
 
     # set level
     setLevel(level)
@@ -123,11 +129,11 @@ def setLevel(level):
 
     if not isinstance(level, int): level = convertLevel(level)
 
-    if console_logger is not None:
-        console_logger.setLevel(level)
+    if console_handler is not None:
+        console_handler.setLevel(level)
 
-    if stream_logger is not None:
-        stream_logger.setLevel(level)
+    if stream_handler is not None:
+        stream_handler.setLevel(level)
 
     logger.setLevel(level)
 
