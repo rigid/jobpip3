@@ -12,6 +12,7 @@ if __name__ == "__main__":
     import sys
     from jobpip3.sources import ExampleSource
     from jobpip3.functions import ExampleFunction
+    from jobpip3.sinks import ExampleSink
     from jobpip3 import Pipe
 
     #~ # ------------------------------------------------------------------------
@@ -56,23 +57,26 @@ if __name__ == "__main__":
     # ------------------------------------------------------------------------
     # create subprocesses + run in parallel + restart every 2 records
 
-    src = ExampleSource(foo="bar", mode='subprocess')
-    func = ExampleFunction(mode='subprocess', parallel_workers=2, worker_limit=1)
-
-    records = src.flow()
-    records = func.flow(records)
-
-    for r in records:
-        r.write(sys.stdout)
-
-    print "----------------------------------------------------------"
+#    src = ExampleSource(foo="bar", mode='subprocess')
+#    func = ExampleFunction(mode='subprocess', parallel_workers=2, worker_limit=1)
+#
+#    records = src.flow()
+#    records = func.flow(records)
+#
+#    for r in records:
+#        r.write(sys.stdout)
+#
+#    print "----------------------------------------------------------"
 
 
     # ------------------------------------------------------------------------
     # Pipe test
-    pipe = Pipe(ExampleSource(), [ ExampleFunction() ])
+    pipe = Pipe(
+        ExampleSource(count=1000),
+        [ ExampleFunction(quick=True) ],
+        ExampleSink()
+    )
 
-    for r in pipe.run():
-        r.write(sys.stdout)
+    pipe.run()
 
     print "----------------------------------------------------------"
