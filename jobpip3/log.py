@@ -1,9 +1,8 @@
 
-# wrapper module for panoracle logging
-
 import os
 import logging
 import inspect
+from . import fs
 
 
 # main logger instance
@@ -34,10 +33,20 @@ def _construct(msg, level):
 
 
 # ------------------------------------------------------------------------------
-def init(instance="jobpip3", level="info", console=False, stream=False):
+def init(
+    instance="jobpip3",
+    path=".",
+    filename=None,
+    level="info",
+    file=False,
+    console=False,
+    stream=False):
     """initialize logging mechanism for an instance.
        :param instance: Name of this instance (e.g. program name)
        :param level: The current loglevel (s. _level_to_string)
+       :param path: The default directory to place file into
+       :param filename: name of logfile, if None defaults to <instance>.log
+       :param file: output to file if True
        :param console: output to stderr if true
        :param stream: output to stderr in parseable format"""
 
@@ -48,10 +57,26 @@ def init(instance="jobpip3", level="info", console=False, stream=False):
     # environment variable takes precedence
     level = os.getenv('LOG_LEVEL', level)
     console = bool(os.getenv('LOG_CONSOLE', console))
+    file = bool(os.getenv('LOG_FILE', file))
 
     # main logger
     global logger
     logger = logging.getLogger(instance)
+
+    # file logger ?
+    if file:
+        # mkdir path
+        fs.mkdir_p(path)
+
+        # bild filename
+        if filename is None: filename = instance + ".log"
+
+        # configure logger
+        logging.basicConfig(
+            filename=path + '/' + filename,
+            level=level.upper(),
+            format='%(asctime)s %(message)s'
+        )
 
     # stream logger ?
     if stream:
