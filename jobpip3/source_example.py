@@ -53,5 +53,5 @@ class ExampleSource(Source):
 
             # output record
             yield record
-
+            self.passed += 1
 
