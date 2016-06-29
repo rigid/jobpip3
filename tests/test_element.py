@@ -24,7 +24,7 @@ class TestElement(unittest.TestCase):
 
     def test_output(self):
 
-        e = Test1()
+        e = Test1(mode='internal')
 
         i = 0
         for r in e.flow():
