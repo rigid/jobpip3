@@ -12,7 +12,7 @@ from subprocess import Popen, PIPE, STDOUT
 try: from Queue import Queue, Empty, Full  # python 2.x
 except ImportError: from queue import Queue, Empty, Full  # python 3.x
 
-from . import log
+from .util import log
 from .record import Record
 
 
@@ -233,8 +233,9 @@ class Element(object):
             try: keyword, payload = line.split(":", 1)
             # log malformed input at error level
             except ValueError:
-                log.error("{}: \"{}\"".format(
+                log.error("{} ({}): \"{}\"".format(
                     self.__class__.__name__,
+                    worker['process'].pid,
                     line.strip()
                 ))
                 continue
@@ -522,6 +523,10 @@ class Element(object):
         # block until all tasks are done
         self._outqueue.join()
         self._inqueue.join()
+
+        # update stats
+        self.total = self.input_count
+        self.passed = self.output_count
 
         # status message
         self._status()
