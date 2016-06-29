@@ -5,8 +5,9 @@ import importlib
 import types
 import itertools
 
-from _source import Source
-from record import Record
+from .util import log
+from ._source import Source
+from .record import Record
 
 
 
@@ -38,6 +39,7 @@ class Readfile(Source):
 
 
     def well(self):
+        log.debug("reading files: {}".format(self.filenames))
 
         for file in self.filenames:
             with open(file, 'rb') as fd:
