@@ -5,9 +5,9 @@ import importlib
 import types
 import itertools
 
-from .util import log
+from ..util import log
+from ..record import Record
 from ._source import Source
-from .record import Record
 
 
 

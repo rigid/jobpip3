@@ -4,8 +4,8 @@
 
 import time
 import random
-from _function import Function
-from source_example import ExampleRecord
+from ._function import Function
+from ..source.example import ExampleRecord
 
 
 

@@ -1,6 +1,6 @@
 
-from _element import Element
-from record import Record
+from .._element import Element
+from ..record import Record
 
 
 class Source(Element):

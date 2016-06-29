@@ -381,8 +381,8 @@ class Element(object):
             self.__class__.__name__,
             os.path.split(os.path.dirname(__file__))[0],
             "[{}, {}, {}, {}, {}, {}]".format(
-                # name of element module
-                self.__class__.__module__.split('.')[-1],
+                # name of element module (without package)
+                self.__class__.__module__,
                 # element class name
                 self.__class__.__name__,
                 # incremental id of this process
@@ -407,7 +407,7 @@ class Element(object):
                 # loglevel
                 log.getLevel(),
                 # name of element module
-                self.__class__.__module__.split('.')[-1],
+                self.__class__.__module__,
                 # element class name
                 self.__class__.__name__,
                 # incremental id of this process
@@ -653,12 +653,10 @@ if __name__ == "__main__":
 
     # set exception hook to handle exceptions in this subprocess
     sys.excepthook = Element._excepthook
-    # get name of our package
-    package = os.path.split(os.path.dirname(__file__))[-1]
     # current loglevel of parent process
     loglevel = sys.argv[1]
     # the module to import the element class from
-    element_module = importlib.import_module(package + "." + sys.argv[2])
+    element_module = importlib.import_module(sys.argv[2])
     # element class
     element_class = getattr(element_module, sys.argv[3])
     # incremental id of this subprocess

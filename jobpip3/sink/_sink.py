@@ -1,5 +1,5 @@
 
-from _element import Element
+from .._element import Element
 
 
 class Sink(Element):

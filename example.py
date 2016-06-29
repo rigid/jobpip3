@@ -10,9 +10,9 @@
 # -----------------------------------------------------------------------------
 if __name__ == "__main__":
     import sys
-    from jobpip3.sources import ExampleSource
-    from jobpip3.functions import ExampleFunction
-    from jobpip3.sinks import ExampleSink
+    from jobpip3.source import ExampleSource
+    from jobpip3.function import ExampleFunction
+    from jobpip3.sink import ExampleSink
     from jobpip3 import Pipe
 
     #~ # ------------------------------------------------------------------------
