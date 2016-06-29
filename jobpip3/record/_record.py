@@ -76,6 +76,10 @@ class Record(object):
                 self._dict[key] = native_type(kwargs._dict[key])
 
 
+    def __repr__(self):
+        return self.dump()
+
+
     def __str__(self):
         return self.dump()
 

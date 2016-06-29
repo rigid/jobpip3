@@ -1,1 +1,1 @@
-from _record import Record
+from ._record import Record
