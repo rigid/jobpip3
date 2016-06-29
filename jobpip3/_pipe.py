@@ -1,6 +1,6 @@
 
 from itertools import chain
-from . import log
+from .util import log
 from _source import Source
 
 
@@ -30,7 +30,7 @@ class Pipe(object):
     def run(self):
         """run pipe"""
 
-        log.info("running pipe: {}".format(self))
+        log.debug("running pipe: {}".format(self))
 
         # iterate all sources
         records = self._source.flow()
