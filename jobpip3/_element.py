@@ -19,8 +19,7 @@ from .records import Record
 
 
 class Element(object):
-    """a pipe element must implement the worker() method
-       (or it's wrapped pendant).
+    """a pipe element must implement the worker() method.
 
        The flow() function will serve as a generator wrapper
        for the worker() method that does the actual job.
@@ -30,8 +29,7 @@ class Element(object):
        (multiple) remote hosts mode='remote'
 
        child classes will:
-           - have all arguments to its __init__() be serializable.
-           - pass all arguments to super(...).__init__(...)
+           - pass all arguments in serializable form to super(...).__init__(...)
            - set the InRecord and OutRecord class attribute to define the type
              of records to process/produce (default: record.Record)
            - implement a worker() method that generates and/or consumes
@@ -152,11 +150,13 @@ class Element(object):
 
         # keep writing records while subprocess is alive
         while worker['process'].poll() is None:
-            # don't queue more than 50 records to subprocess at once
-            if worker['unprocessed'] > 50:
-                # wait and retry
-                time.sleep(0.05)
-                continue
+            # break when limit is reached
+            if self.worker_limit != 0 and record_count >= self.worker_limit:
+                break
+
+            # decrement amount of available unprocessed record
+            # slots (or block until there's a free slot)
+            worker['unprocessed'].acquire()
 
             try:
                 # get record from queue (the main feeder thread put it there)
@@ -168,10 +168,6 @@ class Element(object):
                 ))
                 # write to stdin of subprocess
                 record.write(worker['process'].stdin)
-                # another record written to stdin
-                worker['unprocessed_lock'].acquire()
-                worker['unprocessed'] += 1
-                worker['unprocessed_lock'].release()
                 # count one more record
                 record_count += 1
                 # check limit ?
@@ -264,9 +260,7 @@ class Element(object):
                 # subprocess fetched another record from stdin
                 if payload == "record read":
                     # decrement counter
-                    worker['unprocessed_lock'].acquire()
-                    worker['unprocessed'] -= 1
-                    worker['unprocessed_lock'].release()
+                    worker['unprocessed'].release()
                 else:
                     log.warn("got unknown STATUS from subprocess: \"{}\"".format(
                         payload
@@ -370,9 +364,7 @@ class Element(object):
             'writer': None,
             # amount of records written to stdin of this
             # subprocess but have not been read by it, yet
-            'unprocessed': 0,
-            # thread lock
-            'unprocessed_lock': threading.Lock()
+            'unprocessed': threading.BoundedSemaphore(50),
         }
 
 
