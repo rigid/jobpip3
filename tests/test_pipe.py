@@ -81,10 +81,10 @@ class TestPip3(unittest.TestCase):
 
 
 
-    def test_internal(self):
-        """test example pipe with mode='internal'"""
+    def test_internal_quick(self):
+        """test quick example pipe with mode='internal'"""
         for src in self.testsources(mode='internal', worker_limit=0, parallel_workers=1):
-            for func in self.testfunctions(mode='internal', worker_limit=0, parallel_workers=1):
+            for func in self.testfunctions(quick=True, mode='internal', worker_limit=0, parallel_workers=1):
                 pipe = Pipe(src, [ func ])
 
                 for record in pipe.run():
