@@ -74,8 +74,8 @@ class Element(object):
         # count output records
         self.output_count = 0
         # queues to pass records from/to subprocesses
-        self._inqueue = Queue(maxsize=self.parallel_workers*50)
-        self._outqueue = Queue(maxsize=self.parallel_workers*50)
+        self._inqueue = Queue(maxsize=self.parallel_workers*10)
+        self._outqueue = Queue(maxsize=self.parallel_workers*10)
         # thread that feeds records into inqueue
         self._feeder = None
         # (parallel) subprocesses returned by Popen()
@@ -160,7 +160,7 @@ class Element(object):
 
             try:
                 # get record from queue (the main feeder thread put it there)
-                record = self._inqueue.get(timeout=0.5)
+                record = self._inqueue.get(timeout=1.0)
                 # release queue slot
                 self._inqueue.task_done()
                 log.verynoisy("{}: record inqueue -> stdin (unprocessed: {})".format(
@@ -294,8 +294,6 @@ class Element(object):
         """maintain workers"""
 
         while True:
-            # don't run wild
-            time.sleep(0.5)
 
             # maintain all subprocess workers
             for w in self.workers:
@@ -364,7 +362,7 @@ class Element(object):
             'writer': None,
             # amount of records written to stdin of this
             # subprocess but have not been read by it, yet
-            'unprocessed': threading.BoundedSemaphore(50),
+            'unprocessed': threading.BoundedSemaphore(5),
         }
 
 
@@ -490,7 +488,7 @@ class Element(object):
             # yield output records?
             if self.OutRecord is not None:
                 try:
-                    record = self._outqueue.get(timeout=0.5)
+                    record = self._outqueue.get(timeout=1.0)
                     # release queue slot
                     self._outqueue.task_done()
                     log.verynoisy("{}: record outqueue -> generator".format(
@@ -510,7 +508,7 @@ class Element(object):
             # no need to yield output records, just wait for the maintainer
             # thread to die
             else:
-                time.sleep(0.1)
+                time.sleep(0.5)
 
         # block until all tasks are done
         self._outqueue.join()
