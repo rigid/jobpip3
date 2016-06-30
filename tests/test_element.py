@@ -1,6 +1,6 @@
 
 import unittest
-from jobpip3.record import Record
+from jobpip3 import Record
 from jobpip3._element import Element
 
 

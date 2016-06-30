@@ -13,7 +13,7 @@ try: from Queue import Queue, Empty, Full  # python 2.x
 except ImportError: from queue import Queue, Empty, Full  # python 3.x
 
 from .util import log
-from .record import Record
+from .records import Record
 
 
 
@@ -381,7 +381,7 @@ class Element(object):
             self.__class__.__name__,
             os.path.split(os.path.dirname(__file__))[0],
             "[{}, {}, {}, {}, {}, {}]".format(
-                # name of element module (without package)
+                # name of element module
                 self.__class__.__module__,
                 # element class name
                 self.__class__.__name__,

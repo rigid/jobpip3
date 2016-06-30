@@ -1,7 +1,7 @@
 
 from itertools import chain
 from .util import log
-from .source import Source
+from .sources import Source
 
 
 

@@ -6,8 +6,9 @@ import types
 import itertools
 
 from ..util import log
-from ..record import Record
-from ._source import Source
+from .. import records
+from ..records import Record
+from . import Source
 
 
 
@@ -20,9 +21,7 @@ class Readfile(Source):
                 be read (default: Record)"""
 
         if isinstance(record_class, (str, unicode)):
-            package = os.path.split(os.path.dirname(__file__))[-1]
-            record_module = importlib.import_module(package + ".record")
-            record_class = getattr(record_module, record_class)
+            record_class = getattr(records, record_class)
 
         super(Readfile, self).__init__(
             files=files,

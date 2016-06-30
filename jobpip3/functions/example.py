@@ -5,7 +5,7 @@
 import time
 import random
 from ._function import Function
-from ..source.example import ExampleRecord
+from ..sources.example import ExampleRecord
 
 
 
