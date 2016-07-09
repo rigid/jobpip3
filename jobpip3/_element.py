@@ -18,7 +18,23 @@ from .records import Record
 
 
 
-class SubprocessElement():
+
+class Element(object):
+    """a pipe element must implement the worker() method.
+
+       The flow() function will serve as a generator wrapper
+       for the worker() method that does the actual job.
+
+       The worker() method can run as normal generator (mode='internal')
+       or as (multiple) subprocesses (mode='subprocess') or on
+       (multiple) remote hosts mode='remote'
+
+       child classes will:
+           - pass all arguments in serializable form to super(...).__init__(...)
+           - set the InRecord and OutRecord class attribute to define the type
+             of records to process/produce (default: record.Record)
+           - implement a worker() method that generates and/or consumes
+             records"""
 
     # set to True when we run on a POSIX system
     IS_POSIX = 'posix' in sys.builtin_module_names
@@ -27,21 +43,37 @@ class SubprocessElement():
     def __init__(self,
                  parallel_workers=1,
                  worker_limit=0,
+                 mode='subprocess',
                  *args,
                  **kwargs):
         """:param parallel_workers: launch this many parallel workers
            :param worker_limit: if >0, restart subprocess after n input or
                 output records. Elements without inputs are not restarted but
-                just cut off."""
+                just cut off.
+           :param mode:
+                - 'internal' to run element as normal generator (parallel_workers
+                will always be 1)
+                - 'subprocess' fork subprocess(es)"""
 
         # amount of processes to fork()
         self.parallel_workers = parallel_workers
         if parallel_workers <= 0:
             raise ValueError("parallel_workers must be > 0")
+
         # restart subprocess after it has processed this many input records
         self.worker_limit = worker_limit
+        # mode we are running in (internal, subprocess, ...)
+        self.mode = mode
         # true, if we are running inside a subproccess
         self.is_subprocess = False
+        # class of input records
+        self.InRecord = Record
+        # class of output records
+        self.OutRecord = Record
+        # count input records
+        self.input_count = 0
+        # count output records
+        self.output_count = 0
         # amount of various kinds of record slots of this element
         slots = self.parallel_workers*10
         # queues to pass records from/to subprocesses
@@ -54,9 +86,19 @@ class SubprocessElement():
         # current process-id
         self._worker_id = 0
 
+        # total amount of records seen by this processor (passed + dismissed)
+        self.total = 0
+        # amount of records that passed through this processor
+        self.passed = 0
+        # amount of records that were not passed on
+        self.dismissed = 0
+        # amount of records that were touched by this processor
+        self.modified = 0
+
         # args
         self._args = args
         self._kwargs = kwargs
+
 
     def __str__(self):
         return "<{}({}parallel_workers={}, worker_limit={}, mode={}{}) object>".format(
@@ -66,6 +108,30 @@ class SubprocessElement():
             self.worker_limit,
             self.mode,
             ", kwargs=" + unicode(self._kwargs) if self._kwargs != {} else ""
+        )
+
+
+    def __repr__(self):
+        return self.__str__()
+
+
+    def _status(self):
+        """print current state of this processor"""
+
+        # calculate missing values
+        if self.total == 0 and (self.passed != 0 or self.dismissed != 0):
+            self.total = self.passed + self.dismissed
+        elif self.passed == 0 and (self.total != 0 or self.dismissed != 0):
+            self.passed = self.total - self.dismissed
+        elif self.dismissed == 0 and (self.total != 0 or self.passed != 0):
+            self.dismissed = self.total - self.passed
+
+        log.info("{}: passed: {}, dismissed: {}, "
+                 "modified: {}, total: {}".format(
+                self.__class__.__name__,
+                self.passed, self.dismissed,
+                self.modified, self.total
+            )
         )
 
 
@@ -425,7 +491,7 @@ class SubprocessElement():
         return w
 
 
-    def flow(self, records=None):
+    def _flow_subprocess(self, records):
         """manage flow of element by forking subprocesses"""
 
         # start feeder thread (feeds records from iterable to queue)
@@ -502,15 +568,7 @@ class SubprocessElement():
         self._status()
 
 
-class InternalElement():
-
-    def __str__(self):
-        return "<{}() object>".format(
-            self.__class__.__name__
-        )
-
-
-    def flow(self, records=None):
+    def _flow_internal(self, records):
         """simple pass through of input/output records with limit checking"""
 
         def input_wrapper(records):
@@ -526,6 +584,11 @@ class InternalElement():
 
                 # return record
                 yield record
+
+
+        # is worker_limit set?
+        if self.worker_limit > 0:
+            raise ValueError("worker_limit != 0 is not supported with mode='internal'")
 
         # process all records
         for record in self.worker(input_wrapper(records)):
@@ -545,99 +608,40 @@ class InternalElement():
         self._status()
 
 
-class Element(object):
-    """a pipe element must implement the worker() method.
-
-       The flow() function will serve as a generator wrapper
-       for the worker() method that does the actual job.
-
-       The worker() method can run as normal generator (mode='internal')
-       or as (multiple) subprocesses (mode='subprocess') or on
-       (multiple) remote hosts mode='remote'
-
-       child classes will:
-           - pass all arguments in serializable form to super(...).__init__(...)
-           - set the InRecord and OutRecord class attribute to define the type
-             of records to process/produce (default: record.Record)
-           - implement a worker() method that generates and/or consumes
-             records"""
+    def flow(self, records=None):
+        """generator/method that yields records from this element and/or passes
+           records to it for processing them. Generator when Element() produces
+           records (self.OutRecord != None), method when not
+           (self.OutRecord == None)
+           :param records: input records (optional)"""
 
 
-    def __new__(cls, *args, **kwargs):
-        """:param mode:
-                - 'internal' to run element as normal generator
-                  (parallel_workers will always be 1)
-                - 'subprocess' fork subprocess(es)"""
-
-        # got a mode?
-        if 'mode' in kwargs:
-            mode = kwargs['mode']
-            del(kwargs['mode'])
-        else:
-            mode = "subprocess"
-
-        # select mode in which this element runs
-        if mode == "subprocess":
-            parent = SubprocessElement
-
-        elif mode == "internal":
-            parent = InternalElement
-
-        else:
-            raise ValueError("Unsupported mode: {}".format(mode))
-
-        # set parent class
-        Element.__bases__ = (parent, object)
-
-        # create instance
-        return super(Element, cls).__new__(cls, *args, **kwargs)
-
-
-    def __repr__(self):
-        return self.__str__()
-
-
-    def __init__(self, *args, **kwargs):
-        super(Element, self).__init__(*args, **kwargs)
-
-        # count input records
-        self.input_count = 0
-        # count output records
-        self.output_count = 0
-
-        # total amount of records seen by this processor (passed + dismissed)
+        # reset counters
         self.total = 0
-        # amount of records that passed through this processor
-        self.passed = 0
-        # amount of records that were not passed on
         self.dismissed = 0
-        # amount of records that were touched by this processor
+        self.passed = 0
         self.modified = 0
 
-        # default class of input records
-        self.InRecord = Record
-        # default class of output records
-        self.OutRecord = Record
+        # how should we run?
+        if self.mode == 'internal':
+            # use parallel threads ?
+            if self.parallel_workers > 1:
+                raise NotImplementedError(
+                    "{}: parallel_workers={} and threading with mode='internal' "
+                    "not supported, yet".format(
+                        self.__class__.__name__, self.parallel_workers
+                    )
+                )
+            # no parallelization
+            return self._flow_internal(records)
 
+        # fork subprocess
+        elif self.mode == 'subprocess':
+            return self._flow_subprocess(records)
 
-    def _status(self):
-        """print current state of this processor"""
-
-        # calculate missing values
-        if self.total == 0 and (self.passed != 0 or self.dismissed != 0):
-            self.total = self.passed + self.dismissed
-        elif self.passed == 0 and (self.total != 0 or self.dismissed != 0):
-            self.passed = self.total - self.dismissed
-        elif self.dismissed == 0 and (self.total != 0 or self.passed != 0):
-            self.dismissed = self.total - self.passed
-
-        log.info("{}: passed: {}, dismissed: {}, "
-                 "modified: {}, total: {}".format(
-                self.__class__.__name__,
-                self.passed, self.dismissed,
-                self.modified, self.total
-            )
-        )
+        # unknwon mode
+        else:
+            raise NotImplementedError("Unknown mode: {}".format(self.mode))
 
 
     def worker(self, records):
@@ -648,6 +652,9 @@ class Element(object):
                 self.__class__.__name__
             )
         )
+
+
+
 
 
 # -----------------------------------------------------------------------------
@@ -681,7 +688,7 @@ if __name__ == "__main__":
 
 
     # set exception hook to handle exceptions in this subprocess
-    sys.excepthook = SubprocessElement._excepthook
+    sys.excepthook = Element._excepthook
     # current loglevel of parent process
     loglevel = sys.argv[1]
     # the module to import the element class from
@@ -736,5 +743,4 @@ if __name__ == "__main__":
     log.debug("{}: exiting. records in: {}, out: {}".format(
         setproctitle.getproctitle(), e.input_count, e.output_count
     ))
-
 
