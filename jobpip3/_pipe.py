@@ -37,6 +37,7 @@ class Pipe(object):
 
         # iterate all processors
         for function in self._functions:
+            if function is None: continue
             r = function.flow(records)
             records = r
 
