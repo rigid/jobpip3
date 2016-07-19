@@ -84,22 +84,6 @@ class Record(object):
         return self.dump()
 
 
-    def __iter__(self):
-        return self._dict.iterkeys()
-
-
-    def __delitem__(self, key):
-        del self._dict[key]
-
-
-    def __getitem__(self, key):
-        return self._dict[key]
-
-
-    def __setitem__(self, key, val):
-        self._dict[key] = val
-
-
     def __hash__(self):
         """return hash of this record"""
 
@@ -123,6 +107,33 @@ class Record(object):
         h = _hash(self._dict)
         self.unserialize()
         return h
+
+
+    def __iter__(self):
+        return self._dict.iterkeys()
+
+
+    def __delitem__(self, key):
+        del self._dict[key]
+
+
+    def __getitem__(self, key):
+        return self._dict[key]
+
+
+    def __setitem__(self, key, val):
+        self._dict[key] = val
+
+    def keys(self):
+        return self._dict.keys()
+
+
+    def iterkeys(self):
+        return self._dict.iterkeys()
+
+
+    def iteritems(self):
+        return self._dict.iteritems()
 
 
     def serialize(self):
