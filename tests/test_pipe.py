@@ -36,10 +36,10 @@ class TestPip3(unittest.TestCase):
                         mode=m,
                         parallel_workers=p,
                         string="test",
-                        int=5,
-                        float="Inf",
-                        list=[4,5,6],
-                        dict={'x':1, 'y':0}
+                        i=5,
+                        f="Inf",
+                        l=[4,5,6],
+                        d={'x':1, 'y':0}
                     )
 
     def testfunctions(
