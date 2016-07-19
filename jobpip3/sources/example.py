@@ -12,30 +12,25 @@ class ExampleRecord(Record):
 class ExampleSource(Source):
     """simple example source generating ExampleRecords()"""
 
-    def __init__(self, *args, **kwargs):
-        """:param string: set value of string (default: "foo")
-           :param int: set value of int (default: 1)
-           :param float: set value of float (default: 1.5)
-           :param list: set list (default: [1,2,3])
-           :param dict: set dict (default: { '1' : 1, '2' : 2, '3' : 3 })"""
-        super(ExampleSource, self).__init__(*args, **kwargs)
+    def init(self, count=10, string="foo", i=1, f=1.5, l=[1,2,3],
+             d={ '1' : 1, '2' : 2, '3' : 3 }, **kwargs):
+        """:param count: amount of records this source will generate
+           :param string: set value of string (default: "foo")
+           :param i: set value of int (default: 1)
+           :param f: set value of float (default: 1.5)
+           :param l: set list (default: [1,2,3])
+           :param d: set dict (default: { '1' : 1, '2' : 2, '3' : 3 })"""
 
         # we will output TestRecord() objects
         self.OutRecord = ExampleRecord
 
         # handle arguments
-        if 'count' in kwargs: self.count = int(kwargs['count'])
-        else: self.count = 10
-        if 'string' in kwargs: self.string = unicode(kwargs['string'])
-        else: self.string = "foo"
-        if 'int' in kwargs: self.int = int(kwargs['int'])
-        else: self.int = 1
-        if 'float' in kwargs: self.float = float(kwargs['float'])
-        else: self.float = 1.5
-        if 'list' in kwargs: self.list = list(kwargs['list'])
-        else: self.list = [1,2,3]
-        if 'dict' in kwargs: self.dict = dict(kwargs['dict'])
-        else: self.dict = { '1' : 1, '2' : 2, '3' : 3 }
+        self.count = int(count)
+        self.string = unicode(string)
+        self.int = int(i)
+        self.float = float(f)
+        self.list = list(l)
+        self.dict = dict(d)
 
 
     def well(self):

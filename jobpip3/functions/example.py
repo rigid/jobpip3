@@ -4,19 +4,17 @@
 
 import time
 import random
-from ._function import Function
+from . import Function
 from ..sources.example import ExampleRecord
 
 
 
 class ExampleFunction(Function):
 
-    def __init__(self, *args, **kwargs):
-        super(ExampleFunction, self).__init__(*args, **kwargs)
+    def init(self, quick=False, **kwargs):
 
         # don't sleep if quick is True
-        if 'quick' in kwargs: self.quick = kwargs['quick']
-        else: self.quick = False
+        self.quick = quick
 
         self.InRecord = ExampleRecord
         self.OutRecord = ExampleRecord

@@ -2,16 +2,14 @@
 
 
 from ..util import log
-from ._sink import Sink
+from . import Sink
 
 
 
 
 class ExampleSink(Sink):
 
-    def __init__(self, *args, **kwargs):
-        super(ExampleSink, self).__init__(*args, **kwargs)
-
+    def init(self, *args, **kwargs):
         self._count = 0
 
 

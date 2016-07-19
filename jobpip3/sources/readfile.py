@@ -29,6 +29,8 @@ class Readfile(Source):
             **kwargs
         )
 
+
+    def init(self, files, record_class, **kwargs):
         # handle arguments
         self.filenames = files
         if not isinstance(self.filenames, (list, types.GeneratorType)):
