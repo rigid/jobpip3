@@ -7,7 +7,11 @@ import time
 import traceback
 import threading
 import setproctitle
-import prctl
+try:
+    import prctl
+    HAVE_PRCTL=True
+except:
+    HAVE_PRCTL=False
 from subprocess import Popen, PIPE, STDOUT
 
 try: from Queue import Queue, Empty, Full  # python 2.x
@@ -56,12 +60,12 @@ class Element(object):
                 - 'subprocess' fork subprocess(es)"""
 
         # amount of processes to fork()
-        self.parallel_workers = parallel_workers
+        self.parallel_workers = int(parallel_workers)
         if parallel_workers <= 0:
             raise ValueError("parallel_workers must be > 0")
 
         # restart subprocess after it has processed this many input records
-        self.worker_limit = worker_limit
+        self.worker_limit = int(worker_limit)
         # mode we are running in (internal, subprocess, ...)
         self.mode = mode
         # true, if we are running inside a subproccess
@@ -98,6 +102,10 @@ class Element(object):
         # args
         self._args = args
         self._kwargs = kwargs
+
+        # call second stage init when running in mode='internal'
+        if self.mode == 'internal':
+            self.init(*args, **kwargs)
 
 
     def __str__(self):
@@ -234,8 +242,9 @@ class Element(object):
         """read status & logging output from subprocess stderr"""
 
         thread = threading.currentThread()
-        # set thread name
-        prctl.set_name(thread.name)
+        if HAVE_PRCTL:
+            # set thread name
+            prctl.set_name(thread.name)
         log.noisy("{}: started".format(thread.name))
 
         for line in iter(worker['process'].stderr.readline, ''):
@@ -291,8 +300,9 @@ class Element(object):
         """feed records to input queue (all subprocesses of this element)"""
 
         thread = threading.currentThread()
-        # set thread name
-        prctl.set_name(thread.name)
+        if HAVE_PRCTL:
+            # set thread name
+            prctl.set_name(thread.name)
         log.noisy("{}: started".format(thread.name))
 
         # keep feeding
@@ -314,8 +324,9 @@ class Element(object):
         """maintain workers"""
 
         thread = threading.currentThread()
-        # set thread name
-        prctl.set_name(thread.name)
+        if HAVE_PRCTL:
+            # set thread name
+            prctl.set_name(thread.name)
         log.noisy("{}: started".format(thread.name))
 
         while True:
@@ -606,6 +617,11 @@ class Element(object):
 
         # status message
         self._status()
+
+
+    def init(self, *args, **kwargs):
+        """optional second stage one-time init for this element"""
+        pass
 
 
     def flow(self, records=None):
