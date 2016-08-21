@@ -7,7 +7,6 @@ class Record(object):
     # file suffix for base record class output
     FILE_SUFFIX = "json"
 
-
     def __init__(self, record=None, **kwargs):
         """:param record: record string, dict or Record()
                 object that will be reconstructed
@@ -94,7 +93,7 @@ class Record(object):
     @staticmethod
     def _serialize(key, value):
         """convert field to serializable data"""
-	# ...
+        # ...
         return value
 
 
@@ -115,6 +114,10 @@ class Record(object):
 
     def merge(self, record):
         """merge this record with another record"""
+        # don't merge with outself
+        if record == self:
+            return
+        # ...
         self._dict.update(record._dict)
 
 
