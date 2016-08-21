@@ -2,14 +2,13 @@
 import json
 
 
-
 class Record(object):
 
     # file suffix for base record class output
     FILE_SUFFIX = "json"
 
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, record=None, **kwargs):
         """:param record: record string, dict or Record()
                 object that will be reconstructed
            :param missing_key_is_fatal: if not None, MissingAttributeError()
@@ -17,63 +16,20 @@ class Record(object):
 
         self._dict = {}
 
-        # we can pass a record as keyword arg to use as stencil
-        if "record" in kwargs:
-            r = kwargs['record']
-        # the first positional argument can be a record
-        elif len(args) > 0:
-            r = args[0]
-        else:
-            r = None
-
         # got a record passed as argument?
-        if r is not None:
-            # record can be a dict...
-            if isinstance(r, dict):
-                self._dict = r
-            # string
-            elif isinstance(r, (str, unicode)):
-                self.parse(r)
-            # ...or another Record() object
-            elif isinstance(r, Record): self._dict = r._dict
+        if record is not None:
+            # parse json string to dict
+            if isinstance(record, (str, unicode)):
+                record = json.loads(record)
+            # process dict or Record() object...
+            if isinstance(record, (Record, dict)):
+                for k,v in record.iteritems(): self[k] = v
             # ?
             else: raise ValueError(
                 "unknown type: {}, Expected Record(), dict or string".format(
-                    type(r)
+                    type(record)
                 )
             )
-
-        # store our classname inside Record(), so we can pass it to subprocess/
-        # remote running Element()s
-        self._dict['__classname__'] = self.__class__.__name__
-
-
-
-
-    def _init_class_specific_keys(self, keys, **kwargs):
-
-        ## handle class specific keys
-        for key, native_type in keys:
-
-            # if [<key>] is not set, yet...
-            if key not in self._dict:
-                # raise exception ?
-                if kwargs.get('missing_key_is_fatal', None) is not None:
-                    raise MissingAttributeError(key)
-                # ...set it to None ?
-                else:
-                    self._dict[key] = None
-
-
-            # if set already...
-            else:
-                # convert it to our type
-                self._dict[key] = native_type(self._dict[key])
-
-            # elements that are passed as argument to the constructor, will
-            # override those of the instance passed as "record="
-            if key in kwargs:
-                self._dict[key] = native_type(kwargs._dict[key])
 
 
     def __repr__(self):
@@ -103,9 +59,7 @@ class Record(object):
                 return hash(val)
 
 
-        self.serialize()
-        h = _hash(self._dict)
-        self.unserialize()
+        h = _hash(self.serialized())
         return h
 
 
@@ -122,7 +76,8 @@ class Record(object):
 
 
     def __setitem__(self, key, val):
-        self._dict[key] = val
+        # convert to native value if necessary
+        self._dict[key] = Record._unserialize(key, val)
 
     def keys(self):
         return self._dict.keys()
@@ -136,24 +91,37 @@ class Record(object):
         return self._dict.iteritems()
 
 
-    def serialize(self):
-        """convert all fields of a record to serializable data"""
-        pass
+    @staticmethod
+    def _serialize(key, value):
+        """convert field to serializable data"""
+	# ...
+        return value
 
 
-    def unserialize(self):
-        """convert all serializable data of a record back to its original type"""
-        pass
+    @staticmethod
+    def _unserialize(key, value):
+        """convert serializable value back to its original type"""
+        # ...
+        return value
+
+
+    def serialized(self):
+        """create serialized dict from record"""
+        r = {}
+        for k,v in self._dict.iteritems():
+            r[k] = Record._serialize(k, v)
+        return r
+
+
+    def merge(self, record):
+        """merge this record with another record"""
+        self._dict.update(record._dict)
 
 
     def dump(self):
         """dump record as string"""
-        # make this object serializable
-        self.serialize()
         # dump to json string
-        s = json.dumps(self._dict)
-        # convert back to native format
-        self.unserialize()
+        s = json.dumps(self.serialized())
         return s
 
 
@@ -163,15 +131,9 @@ class Record(object):
         # newline indicates end of record
         fd.write('\n')
 
-    def parse(self, string):
-        try: self._dict = json.loads(string)
-        except ValueError as e:
-            raise ValueError("{}\nCould not parse: {} ({})".format(
-                e, string, len(string))
-            )
 
-
-    @classmethod
-    def read(cls, fd):
+    @staticmethod
+    def read(fd):
         for line in iter(fd.readline, ""):
-            yield cls(line)
+            yield Record(line)
+
