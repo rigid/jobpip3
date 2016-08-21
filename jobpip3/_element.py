@@ -65,6 +65,11 @@ class Element(object):
                 will always be 1)
                 - 'subprocess' fork subprocess(es)"""
 
+        if getattr(self, "has_input") is None:
+            raise ValueError("has_input attribute must be set in super class")
+        if getattr(self, "has_output") is None:
+            raise ValueError("has_output attribute must be set in super class")
+
         # amount of processes to fork()
         self.parallel_workers = int(parallel_workers)
         if parallel_workers <= 0:
