@@ -1,4 +1,11 @@
-"""pipe element class"""
+"""pipe element class
+ this is the backbone of the pipe mechanism an it's evil.
+ @todo Use wrapper classes like:
+     e = RemoteElement(Element(), host=..., key=...) or
+     e = SubprocessElement(Element(), workers=..., worker_limit=...) etc.
+     for record in e.flow(): ...
+
+     or maybe decorators?"""
 
 import os
 import sys
@@ -17,8 +24,9 @@ from subprocess import Popen, PIPE, STDOUT
 try: from Queue import Queue, Empty, Full  # python 2.x
 except ImportError: from queue import Queue, Empty, Full  # python 3.x
 
-from .util import log
 from .records import Record
+from .util import log
+
 
 
 
@@ -35,8 +43,6 @@ class Element(object):
 
        child classes will:
            - pass all arguments in serializable form to super(...).__init__(...)
-           - set the InRecord and OutRecord class attribute to define the type
-             of records to process/produce (default: record.Record)
            - implement a worker() method that generates and/or consumes
              records"""
 
@@ -47,7 +53,7 @@ class Element(object):
     def __init__(self,
                  parallel_workers=1,
                  worker_limit=0,
-                 mode='subprocess',
+                 mode='internal',
                  *args,
                  **kwargs):
         """:param parallel_workers: launch this many parallel workers
@@ -70,10 +76,6 @@ class Element(object):
         self.mode = mode
         # true, if we are running inside a subproccess
         self.is_subprocess = False
-        # class of input records
-        self.InRecord = Record
-        # class of output records
-        self.OutRecord = Record
         # count input records
         self.input_count = 0
         # count output records
@@ -111,7 +113,7 @@ class Element(object):
     def __str__(self):
         return "<{}({}parallel_workers={}, worker_limit={}, mode={}{}) object>".format(
             self.__class__.__name__,
-            self._args + ", args=" if self._args != () else "",
+            self._kwargs,
             self.parallel_workers,
             self.worker_limit,
             self.mode,
@@ -227,7 +229,7 @@ class Element(object):
         log.noisy("{}: started".format(thread.name))
 
         # read one record per line from subprocess
-        for record in self.OutRecord.read(worker['process'].stdout):
+        for record in Record.read(worker['process'].stdout):
             # put newly read record into queue
             self._outqueue.put(record)
             log.verynoisy("{}: subprocess stdout -> outqueue".format(
@@ -366,7 +368,7 @@ class Element(object):
 
                 # relaunch process if a worker_limit is set and we still get
                 # input-data
-                if self.InRecord is not None and \
+                if self.has_input and \
                     self.worker_limit > 0 and \
                     (self._feeder.is_alive() or not self._inqueue.empty()):
 
@@ -414,18 +416,13 @@ class Element(object):
         log.debug("{}: launching subprocess, cwd={}, args={}".format(
             self.__class__.__name__,
             os.path.split(os.path.dirname(__file__))[0],
-            "[{}, {}, {}, {}, {}, {}]".format(
-                # name of element module
+            "[{}, {}, {}, {}, {}, {}, {}]".format(
+                log.getLevel(),
                 self.__class__.__module__,
-                # element class name
                 self.__class__.__name__,
-                # incremental id of this process
                 "{}".format(self._worker_id),
-                # record limit
                 "{}".format(self.worker_limit),
-                # args
                 json.dumps(self._args),
-                # kwargs
                 json.dumps(self._kwargs)
             )
         ))
@@ -473,7 +470,7 @@ class Element(object):
         w['feedback'].start()
 
         # start thread to read result-records from subprocesses
-        if self.OutRecord is not None:
+        if self.has_output:
             w['reader'] = threading.Thread(
                 name="{} reader {}".format(
                     self.__class__.__name__, self._worker_id
@@ -485,7 +482,7 @@ class Element(object):
             w['reader'].start()
 
         # start thread to write input-records to subprocess
-        if self.InRecord is not None:
+        if self.has_input:
             w['writer'] = threading.Thread(
                 name="{} writer {}".format(
                     self.__class__.__name__, self._worker_id
@@ -506,7 +503,7 @@ class Element(object):
         """manage flow of element by forking subprocesses"""
 
         # start feeder thread (feeds records from iterable to queue)
-        if self.InRecord is not None:
+        if self.has_input:
             self._feeder = threading.Thread(
                 name="{} feeder".format(self.__class__.__name__),
                 target=self._input_record_feeder,
@@ -530,7 +527,7 @@ class Element(object):
         while self._maintainer.is_alive():
 
             # yield output records?
-            if self.OutRecord is not None:
+            if self.has_output:
                 try:
                     record = self._outqueue.get(timeout=1.0)
                     # release queue slot
@@ -585,14 +582,8 @@ class Element(object):
         def input_wrapper(records):
             """counting generator wrapper"""
             for record in records:
-                # check if input records are of expected class
-                if not isinstance(record, self.InRecord):
-                    # convert it
-                    record = self.InRecord(record)
-
                 # count input records
                 self.input_count += 1
-
                 # return record
                 yield record
 
@@ -601,15 +592,18 @@ class Element(object):
         if self.worker_limit > 0:
             raise ValueError("worker_limit != 0 is not supported with mode='internal'")
 
-        # process all records
-        for record in self.worker(input_wrapper(records)):
-            # process output records ?
-            if self.OutRecord is not None:
-                # check if output records are of expected class
-                if not isinstance(record, self.OutRecord):
-                    # convert it
-                    record = self.OutRecord(record)
+        # got input records ?
+        if self.has_input:
+            # generator that reads record from stdin
+            input_records = input_wrapper(records)
+        else:
+            # element doesn't take input
+            input_records = None
 
+        # process all records
+        for record in self.worker(input_records):
+            # process output records ?
+            if self.has_output:
                 # return record
                 yield record
                 # count output records
@@ -627,8 +621,7 @@ class Element(object):
     def flow(self, records=None):
         """generator/method that yields records from this element and/or passes
            records to it for processing them. Generator when Element() produces
-           records (self.OutRecord != None), method when not
-           (self.OutRecord == None)
+           records, method when not
            :param records: input records (optional)"""
 
 
@@ -681,13 +674,9 @@ if __name__ == "__main__":
     def input_wrapper(element):
         """counting generator wrapper"""
         count = 0
-        for record in element.InRecord.read(sys.stdin):
+        for record in Record.read(sys.stdin):
             # notify parent process that another record has been read
             print >>sys.stderr, "STATUS:record read"
-            # check type
-            if not isinstance(record, element.InRecord):
-                # convert it
-                record = element.InRecord(record)
             # return record
             yield record
             count += 1
@@ -720,7 +709,7 @@ if __name__ == "__main__":
     element_kwargs = json.loads(sys.argv[7])
 
     # set process title
-    setproctitle.setproctitle("{}({}, {})".format(
+    setproctitle.setproctitle("{}({}{})".format(
         element_class.__name__,
         element_args,
         element_kwargs
@@ -742,14 +731,13 @@ if __name__ == "__main__":
         element_class.__name__, worker_id, sys.argv
     ))
 
-    # got no input records ?
-    if e.InRecord is None:
-        # element doesn't take input
-        input_records = None
-    else:
+    # got input records ?
+    if e.has_input:
         # generator that reads record from stdin
         input_records = input_wrapper(e)
-
+    else:
+        # element doesn't take input
+        input_records = None
 
     # yield records from element
     for r in e.flow(input_records):
