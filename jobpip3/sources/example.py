@@ -5,10 +5,6 @@ from . import Source
 from ..records import Record
 
 
-class ExampleRecord(Record):
-    pass
-
-
 class ExampleSource(Source):
     """simple example source generating ExampleRecords()"""
 
@@ -20,9 +16,6 @@ class ExampleSource(Source):
            :param f: set value of float (default: 1.5)
            :param l: set list (default: [1,2,3])
            :param d: set dict (default: { '1' : 1, '2' : 2, '3' : 3 })"""
-
-        # we will output TestRecord() objects
-        self.OutRecord = ExampleRecord
 
         # handle arguments
         self.count = int(count)
@@ -37,7 +30,7 @@ class ExampleSource(Source):
 
         for i in xrange(self.count):
 
-            record = ExampleRecord({
+            record = Record({
                 'string' : self.string,
                 'int' : self.int,
                 'float' : self.float,

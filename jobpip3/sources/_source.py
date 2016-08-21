@@ -1,6 +1,5 @@
 
 from .._element import Element
-from ..records import Record
 
 
 class Source(Element):
@@ -8,9 +7,12 @@ class Source(Element):
        the pipe"""
 
     def __init__(self, *args, **kwargs):
+        # source doesn't receive records (it generates them)
+        self.has_input = False
+        # source outputs records
+        self.has_output = True
+
         super(Source, self).__init__(*args, **kwargs)
-        # a source doesn't have input
-        self.InRecord = None
 
 
     def worker(self, records):
