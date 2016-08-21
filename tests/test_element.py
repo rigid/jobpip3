@@ -10,8 +10,9 @@ RECORD_AMOUNT = 3
 class Test1(Element):
 
     def __init__(self, *args, **kwargs):
+	self.has_input = False
+	self.has_output = True
         super(Test1, self).__init__(*args, **kwargs)
-        self.InRecord = None
 
     def worker(self, records):
         for i in xrange(RECORD_AMOUNT):

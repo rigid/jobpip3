@@ -72,8 +72,8 @@ if __name__ == "__main__":
     # ------------------------------------------------------------------------
     # Pipe test
     pipe = Pipe(
-        ExampleSource(count=1000),
-        [ ExampleFunction(quick=True) ],
+        ExampleSource(count=10),
+        [ ExampleFunction() ],
         ExampleSink()
     )
 
