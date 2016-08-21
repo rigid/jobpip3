@@ -6,8 +6,12 @@ class Function(Element):
     """Function() base class: a Function() takes records from the pipe,
        applies a function to them and passes them further down the pipe"""
 
-
     def __init__(self, *args, **kwargs):
+        # a function gets records input
+        self.has_input = True
+        # a function outputs records
+        self.has_output = True
+
         super(Function, self).__init__(*args, **kwargs)
 
 

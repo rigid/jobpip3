@@ -4,9 +4,8 @@
 
 import time
 import random
-from . import Function
-from ..sources.example import ExampleRecord
 
+from . import Function
 
 
 class ExampleFunction(Function):
@@ -15,9 +14,6 @@ class ExampleFunction(Function):
 
         # don't sleep if quick is True
         self.quick = quick
-
-        self.InRecord = ExampleRecord
-        self.OutRecord = ExampleRecord
 
 
     def process(self, records):
