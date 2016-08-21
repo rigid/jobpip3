@@ -6,7 +6,6 @@ import types
 import itertools
 
 from ..util import log
-from .. import records
 from ..records import Record
 from . import Source
 
@@ -15,36 +14,38 @@ from . import Source
 class Readfile(Source):
     """read records from file(s)"""
 
-    def __init__(self, files, record_class="Record", **kwargs):
-        """:param files: filename or list of filenames
-           :param record_class: class of records that will
-                be read (default: Record)"""
+    def __init__(self, files, **kwargs):
+        """:param files: filename or list of filenames"""
 
-        if isinstance(record_class, (str, unicode)):
-            record_class = getattr(records, record_class)
+        # @todo this will not serialize when files are fd's but we can't
+        # check, because it can be a generator that can only be consumed once
+
+        if not isinstance(files, (list, tuple, types.GeneratorType)):
+            files = [ files ]
 
         super(Readfile, self).__init__(
             files=files,
-            record_class=record_class.__name__,
             **kwargs
         )
 
 
-    def init(self, files, record_class, **kwargs):
-        # handle arguments
-        self.filenames = files
-        if not isinstance(self.filenames, (list, types.GeneratorType)):
-            self.filenames = [ self.filenames ]
+    def init(self, files, **kwargs):
+        """:param files: filename or list of filenames"""
 
-        self.OutRecord = record_class
+        # open files if necessary
+        self.files = []
+        for f in files:
+            if not isinstance(f, file):
+                log.debug("reading from file: {}".format(f))
+                fd = open(f)
+            else:
+                fd = f
+            self.files += [ fd ]
 
 
     def well(self):
-        log.debug("reading files: {}".format(self.filenames))
-
-        for file in self.filenames:
-            with open(file, 'rb') as fd:
-                for record in self.OutRecord.read(fd):
-                    # output record
-                    yield record
-                    self.passed += 1
+        for file in self.files:
+            for record in Record.read(file):
+                # output record
+                yield record
+                self.passed += 1
